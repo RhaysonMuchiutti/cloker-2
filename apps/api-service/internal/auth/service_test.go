@@ -349,3 +349,36 @@ func testConfig() Config {
 		DevReturnOTP: true,
 	}
 }
+
+func TestFixedPasswordLogin(t *testing.T) {
+	s := newTestService()
+	s.cfg.AdminPassword = "private-test-password"
+	if _, err := s.LoginPassword(context.Background(), "wrong"); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("wrong password: %v", err)
+	}
+	session, err := s.LoginPassword(context.Background(), s.cfg.AdminPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := s.Authenticate(context.Background(), session.Token)
+	if err != nil || user.Role != RoleAdmin || !user.Approved {
+		t.Fatalf("invalid administrator session: %+v %v", user, err)
+	}
+	s.cfg.AdminPassword = ""
+	if _, err := s.LoginPassword(context.Background(), ""); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("empty config allowed login: %v", err)
+	}
+}
+
+func TestFixedPasswordRateLimit(t *testing.T) {
+	s := newTestService()
+	s.cfg.AdminPassword = "private-test-password"
+	for i := 0; i < 10; i++ {
+		if _, err := s.LoginPassword(context.Background(), "wrong"); !errors.Is(err, ErrInvalidToken) {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.LoginPassword(context.Background(), s.cfg.AdminPassword); !errors.Is(err, ErrOTPRateLimited) {
+		t.Fatalf("rate limit missing: %v", err)
+	}
+}

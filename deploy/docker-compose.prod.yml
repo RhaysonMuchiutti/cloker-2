@@ -134,10 +134,11 @@ services:
       ADMIN_FRONTEND_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN}
       AUTH_ENV: production
       AUTH_DEV_RETURN_OTP: "false"
+      AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:-}
       AUTH_ADMIN_EMAIL: ${AUTH_ADMIN_EMAIL:?Set the production admin email}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set a unique JWT secret}
-      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:?Set a verified sender}
-      AUTH_RESEND_API_KEY: ${AUTH_RESEND_API_KEY:?Set the production Resend API key}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
+      AUTH_RESEND_API_KEY: ${AUTH_RESEND_API_KEY:-}
     depends_on:
       mongo:
         condition: service_healthy

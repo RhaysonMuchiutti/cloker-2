@@ -51,7 +51,6 @@ import {
   StreamRequest,
   TrackingParam,
   api,
-  ApiRequestError,
   AuthUser,
   setActingAsUserID
 } from "./api";
@@ -309,105 +308,25 @@ function App() {
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [devOTP, setDevOTP] = useState("");
-  const [pendingApproval, setPendingApproval] = useState<AuthUser | null>(null);
-  const form = useForm<{ email: string; otp: string }>({
-    defaultValues: {
-      email: "admin@example.com",
-      otp: ""
-    }
+  const form = useForm<{ password: string }>({ defaultValues: { password: "" } });
+  const login = useMutation({
+    mutationFn: (values: { password: string }) => api.loginPassword(values.password),
+    onSuccess: () => { onLogin(); navigate("/"); }
   });
-  const requestOTP = useMutation({
-    mutationFn: (values: { email: string }) => api.requestOTP(values.email),
-    onSuccess: (data) => {
-      setEmail(data.email);
-      setDevOTP(data.otp ?? "");
-      setPendingApproval(null);
-      form.setValue(
-        "email",
-        data.email
-      );
-      if (data.otp) {
-        form.setValue(
-          "otp",
-          data.otp
-        );
-      }
-    }
-  });
-  const verifyOTP = useMutation({
-    mutationFn: (values: { email: string; otp: string }) =>
-      api.verifyOTP(
-        values.email,
-        values.otp
-      ),
-    onSuccess: () => {
-      onLogin();
-      navigate("/");
-    },
-    onError: (error) => {
-      if (
-        error instanceof ApiRequestError &&
-        error.response?.status === "pending_approval" &&
-        error.response.user
-      ) {
-        setPendingApproval(error.response.user);
-      }
-    }
-  });
-  const error = requestOTP.error ?? verifyOTP.error;
-
   return (
     <main className="grid min-h-screen place-items-center bg-zinc-100 px-4 text-zinc-950">
-      <form
-        className="w-full max-w-sm rounded-md border border-zinc-200 bg-white p-6 shadow-sm"
-        onSubmit={form.handleSubmit((values) => {
-          if (email) {
-            verifyOTP.mutate(values);
-            return;
-          }
-          requestOTP.mutate(values);
-        })}
-      >
+      <form className="w-full max-w-sm rounded-md border border-zinc-200 bg-white p-6 shadow-sm"
+        onSubmit={form.handleSubmit((values) => login.mutate(values))}>
         <div className="text-2xl font-semibold">TraffoFlex</div>
-        <label className="mt-6 block text-sm font-medium">
-          Email
-          <input className="input mt-2" {...form.register("email")} />
+        <p className="mt-2 text-sm text-zinc-600">Digite sua senha para acessar.</p>
+        <label className="mt-6 block text-sm font-medium">Senha
+          <input className="input mt-2" type="password" autoComplete="current-password" required
+            {...form.register("password", { required: true })} />
         </label>
-        {email ? (
-          <label className="mt-4 block text-sm font-medium">
-            OTP
-            <input className="input mt-2" {...form.register("otp")} />
-          </label>
-        ) : null}
-        {devOTP ? <p className="mt-3 rounded-md bg-zinc-100 p-3 text-sm text-zinc-700">Local OTP: {devOTP}</p> : null}
-        {pendingApproval ? (
-          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            Email confirmed. Admin activation is required before this account can enter.
-          </p>
-        ) : null}
-        {error ? <p className="mt-3 text-sm text-red-700">{error.message}</p> : null}
-        <button className="button-primary mt-6 w-full" type="submit">
-          {email ? "Verify OTP" : "Send OTP"}
+        {login.error ? <p className="mt-3 text-sm text-red-700" role="alert">Não foi possível entrar. Confira a senha e a conexão com a API.</p> : null}
+        <button className="button-primary mt-6 w-full" type="submit" disabled={login.isPending}>
+          {login.isPending ? "Entrando…" : "Entrar"}
         </button>
-        {email ? (
-          <button
-            className="button-secondary mt-3 w-full"
-            onClick={() => {
-              setEmail("");
-              setDevOTP("");
-              setPendingApproval(null);
-              form.setValue(
-                "otp",
-                ""
-              );
-            }}
-            type="button"
-          >
-            Change email
-          </button>
-        ) : null}
       </form>
     </main>
   );

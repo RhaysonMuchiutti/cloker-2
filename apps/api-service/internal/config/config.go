@@ -22,6 +22,7 @@ type Config struct {
 	PostbackServiceURL     string
 	AdminFrontendOrigin    string
 	AuthAdminEmail         string
+	AuthAdminPassword      string
 	AuthJWTSecret          string
 	AuthOTPTTLSeconds      int
 	AuthOTPRateLimit       int
@@ -73,6 +74,7 @@ func Load() Config {
 			"ADMIN_FRONTEND_ORIGIN",
 			"http://localhost:5173",
 		),
+		AuthAdminPassword: os.Getenv("AUTH_ADMIN_PASSWORD"),
 		AuthAdminEmail: sharedconfig.Env(
 			"AUTH_ADMIN_EMAIL",
 			"admin@example.com",
@@ -268,6 +270,12 @@ func (c Config) ResendConfigured() bool {
 }
 
 func validateAuthDelivery(c Config) error {
+	if c.AuthAdminPassword != "" {
+		if len(c.AuthAdminPassword) < 12 {
+			return errors.New("AUTH_ADMIN_PASSWORD must contain at least 12 characters")
+		}
+		return nil
+	}
 	if c.AuthDevReturnOTP && !c.LocalAuthEnv() {
 		return errors.New("AUTH_DEV_RETURN_OTP is allowed only for AUTH_ENV local, dev or test")
 	}

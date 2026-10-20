@@ -34,3 +34,13 @@ Nenhum deploy ou configuração de DNS foi realizado nesta importação.
 
 O projeto é apresentado pelo autor como MVP e exige revisão antes de produção.
 Não há nesta importação implementação adicional de cloaking específico para Meta.
+
+## Login por senha fixa
+
+A tela de login usa apenas senha, sem confirmação por e-mail.
+Na API, configure AUTH_ADMIN_PASSWORD com pelo menos 12 caracteres,
+AUTH_ADMIN_EMAIL para identificar a conta administradora e AUTH_JWT_SECRET
+com um segredo aleatório. Nenhuma senha é gravada no código ou no frontend.
+Com AUTH_ADMIN_PASSWORD definido, os endpoints de OTP ficam desativados
+e o envio de e-mail não é exigido. A API e o MongoDB continuam necessários.
+O painel precisa encaminhar /api para a API (porta padrão 8070).

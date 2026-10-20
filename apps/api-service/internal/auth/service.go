@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/devflex/traffoflex/packages/go-shared/ids"
@@ -87,6 +88,7 @@ type Repository interface {
 
 type Config struct {
 	AdminEmail    string
+	AdminPassword string
 	JWTSecret     string
 	OTPTTL        time.Duration
 	OTPRateLimit  time.Duration
@@ -107,10 +109,13 @@ type Session struct {
 }
 
 type Service struct {
-	repo     Repository
-	delivery OTPDelivery
-	cfg      Config
-	now      func() time.Time
+	passwordMu       sync.Mutex
+	passwordWindow   time.Time
+	passwordAttempts int
+	repo             Repository
+	delivery         OTPDelivery
+	cfg              Config
+	now              func() time.Time
 }
 
 func NewService(
@@ -549,4 +554,48 @@ func generateOTP() (
 		"%06d",
 		value.Int64(),
 	), nil
+}
+
+// LoginPassword authenticates the single configured administrator without email delivery.
+func (s *Service) LoginPassword(
+	ctx context.Context,
+	password string,
+) (Session, error) {
+	s.passwordMu.Lock()
+	if s.now().Sub(s.passwordWindow) >= time.Minute {
+		s.passwordWindow = s.now()
+		s.passwordAttempts = 0
+	}
+	if s.passwordAttempts >= 10 {
+		s.passwordMu.Unlock()
+		return Session{}, ErrOTPRateLimited
+	}
+	s.passwordAttempts++
+	s.passwordMu.Unlock()
+	expected := sha256.Sum256([]byte(s.cfg.AdminPassword))
+	actual := sha256.Sum256([]byte(password))
+	if s.cfg.AdminPassword == "" || !hmac.Equal(expected[:], actual[:]) {
+		return Session{}, ErrInvalidToken
+	}
+	email := normalizeEmail(s.cfg.AdminEmail)
+	if err := validateEmail(email); err != nil {
+		return Session{}, err
+	}
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if errors.Is(err, ErrNotFound) {
+		user = s.newUser(email)
+	} else if err != nil {
+		return Session{}, err
+	}
+	s.applyAdminPolicy(&user)
+	user.UpdatedAt = s.now()
+	user, err = s.repo.SaveUser(ctx, user)
+	if err != nil {
+		return Session{}, err
+	}
+	token, err := s.signToken(user)
+	if err != nil {
+		return Session{}, err
+	}
+	return Session{Token: token, User: user}, nil
 }

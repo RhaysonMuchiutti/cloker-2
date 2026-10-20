@@ -97,6 +97,7 @@ func main() {
 				),
 				auth.Config{
 					AdminEmail:    cfg.AuthAdminEmail,
+					AdminPassword: cfg.AuthAdminPassword,
 					JWTSecret:     cfg.AuthJWTSecret,
 					OTPTTL:        time.Duration(cfg.AuthOTPTTLSeconds) * time.Second,
 					OTPRateLimit:  time.Duration(cfg.AuthOTPRateLimit) * time.Minute,

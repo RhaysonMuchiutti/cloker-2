@@ -80,6 +80,7 @@ func NewRouterWithConfig(
 				),
 				auth.Config{
 					AdminEmail:    cfg.AuthAdminEmail,
+					AdminPassword: cfg.AuthAdminPassword,
 					JWTSecret:     cfg.AuthJWTSecret,
 					OTPTTL:        time.Duration(cfg.AuthOTPTTLSeconds) * time.Second,
 					OTPRateLimit:  time.Duration(cfg.AuthOTPRateLimit) * time.Minute,
@@ -220,6 +221,7 @@ func NewRouterWithOptions(
 				},
 			)
 			if opts.AuthService != nil {
+				r.Post("/auth/password", authHandler.LoginPassword)
 				r.Post(
 					"/auth/request-otp",
 					authHandler.RequestOTP,

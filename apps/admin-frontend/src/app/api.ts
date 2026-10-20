@@ -431,6 +431,9 @@ function queryString(filters: Record<string, string | number | undefined>): stri
 }
 
 export const api = {
+  loginPassword: (password: string) => request<AuthSession>("/api/auth/password", {
+    method: "POST", ...jsonBody({ password })
+  }),
   clientConfig: () => request<ClientConfig>("/api/client-config"),
   requestOTP: (email: string) =>
     request<OTPChallenge>(

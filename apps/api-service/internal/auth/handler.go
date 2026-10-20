@@ -42,6 +42,10 @@ func (h *Handler) RequestOTP(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
+	if h.service.cfg.AdminPassword != "" {
+		h.respondError(w, http.StatusForbidden, "Use o acesso por senha", ErrForbidden)
+		return
+	}
 	var req requestOTPBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.respondError(
@@ -74,6 +78,10 @@ func (h *Handler) VerifyOTP(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
+	if h.service.cfg.AdminPassword != "" {
+		h.respondError(w, http.StatusForbidden, "Use o acesso por senha", ErrForbidden)
+		return
+	}
 	var req verifyOTPBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.respondError(
@@ -528,4 +536,29 @@ func (h *Handler) respondError(
 			writeErr,
 		)
 	}
+}
+
+func (h *Handler) LoginPassword(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid JSON body", err)
+		return
+	}
+	session, err := h.service.LoginPassword(r.Context(), req.Password)
+	if err != nil {
+		h.respondServiceError(w, err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookieName, Value: session.Token, Path: "/api",
+		MaxAge: int(h.service.cfg.SessionTTL.Seconds()), HttpOnly: true,
+		Secure: h.service.cfg.CookieSecure, SameSite: http.SameSiteLaxMode,
+	})
+	h.respondJSON(w, http.StatusOK, map[string]any{"user": publicUser(session.User)})
 }

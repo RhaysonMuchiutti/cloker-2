@@ -149,3 +149,14 @@ func TestLoadReadsEnvironment(t *testing.T) {
 		)
 	}
 }
+
+func TestFixedPasswordDoesNotRequireEmailDelivery(t *testing.T) {
+	cfg := Config{AuthAdminPassword: "private-test-password"}
+	if err := validateAuthDelivery(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.AuthAdminPassword = "short"
+	if err := validateAuthDelivery(cfg); err == nil {
+		t.Fatal("short password accepted")
+	}
+}
