@@ -1,3 +1,4 @@
+import { uiValue } from "./locale";
 import React, { useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import {
@@ -59,12 +60,21 @@ import { reportGroups, defaultReportPath, reportTimezones, reportPreset, ReportG
 import "./styles.css";
 
 const queryClient = new QueryClient();
+z.setErrorMap((issue) => ({ message:
+ issue.code === "too_small" ? "Preencha este campo respeitando o valor mínimo."
+ : issue.code === "too_big" ? "O valor informado excede o limite."
+ : issue.code === "invalid_type" ? "Informe um valor válido para este campo."
+ : issue.code === "invalid_string" ? "Informe um texto ou endereço válido."
+ : issue.code === "invalid_enum_value" ? "Selecione uma opção válida."
+ : "Confira os dados informados."
+}));
+
 const RoutingSyncContext = React.createContext<((afterSave?: boolean) => Promise<void>) | null>(null);
 
 function useRoutingSync() {
   const sync = useContext(RoutingSyncContext);
   if (!sync) {
-    throw new Error("Routing sync is unavailable");
+    throw new Error("A sincronização de rotas está indisponível");
   }
   return sync;
 }
@@ -87,7 +97,7 @@ function StatusIndicator({ status }: { status: Status }) {
       <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
         {paths[status]}
       </svg>
-      <span className="capitalize">{status}</span>
+      <span className="capitalize">{uiValue(status)}</span>
     </span>
   );
 }
@@ -172,11 +182,11 @@ const weekdays = [
 type MetricKey = keyof Metrics;
 
 function formatFixed(value: number) {
-  return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+  return Number.isFinite(value) ? value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00";
 }
 
 function formatInteger(value: number) {
-  return Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "0";
+  return Number.isFinite(value) ? Math.round(value).toLocaleString("pt-BR") : "0";
 }
 
 function formatMetricValue(
@@ -271,7 +281,7 @@ function App() {
       setAuthenticated(false);
       setLogoutError("");
     } catch {
-      setLogoutError("Logout failed. Please retry.");
+      setLogoutError("Não foi possível sair. Tente novamente.");
     }
   }
 
@@ -292,7 +302,7 @@ function App() {
             path="/*"
             element={
               authenticated === null ? (
-                <p>Loading session…</p>
+                <p>Carregando sessão…</p>
               ) : authenticated ? (
                 <Layout onLogout={onLogout} actingAs={actingAs} onActAs={onActAs} />
               ) : (
@@ -350,17 +360,17 @@ function Layout({ onLogout, actingAs, onActAs }: {
     const requestID = ++latestRoutingRequest.current;
     setRoutingPending((current) => current + 1);
     setRoutingStatus("pending");
-    setRoutingMessage("Refreshing routing snapshot…");
+    setRoutingMessage("Atualizando as rotas…");
     try {
       await api.reloadTrafficCache();
       if (requestID === latestRoutingRequest.current) {
         setRoutingStatus("success");
-        setRoutingMessage("Routing snapshot refreshed.");
+        setRoutingMessage("Rotas atualizadas.");
       }
     } catch (error) {
       if (requestID === latestRoutingRequest.current) {
         setRoutingStatus("error");
-        setRoutingMessage(`${afterSave ? "Change saved in MongoDB, but routing refresh failed." : "Routing refresh failed."} Retry here. ${error instanceof Error ? error.message : ""}`);
+        setRoutingMessage(`${afterSave ? "Alteração salva no MongoDB, mas não foi possível atualizar as rotas." : "Não foi possível atualizar as rotas."} Tente novamente aqui. ${error instanceof Error ? error.message : ""}`);
       }
     } finally {
       setRoutingPending((current) => current - 1);
@@ -374,24 +384,27 @@ function Layout({ onLogout, actingAs, onActAs }: {
         <div className="mt-2 text-xs text-zinc-500">{me.data?.email}</div>
         {actingAs ? (
           <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-            Working as {actingAs.email}
+
+            Acessando como {actingAs.email}
             <button className="mt-2 block underline" onClick={() => void onActAs(null)} type="button">
-              Return to my data
+
+              Voltar aos meus dados
             </button>
           </div>
         ) : null}
         <nav className="mt-8 flex flex-col gap-1 text-sm">
-          <NavLink to="/">Dashboard</NavLink>
-          <NavLink to="/campaigns">Campaigns</NavLink>
-          <NavLink to="/destinations">Destinations</NavLink>
+          <NavLink to="/">Visão geral</NavLink>
+          <NavLink to="/campaigns">Campanhas</NavLink>
+          <NavLink to="/destinations">Destinos</NavLink>
           <NavLink to="/postbacks">Postbacks</NavLink>
-          <NavLink to="/health-history">Health History</NavLink>
-          <NavLink to="/reports">Reports</NavLink>
-          {me.data?.role === "admin" ? <NavLink to="/ingestion">Ingestion</NavLink> : null}
-          {me.data?.role === "admin" ? <NavLink to="/users">Users</NavLink> : null}
+          <NavLink to="/health-history">Histórico de disponibilidade</NavLink>
+          <NavLink to="/reports">Relatórios</NavLink>
+          {me.data?.role === "admin" ? <NavLink to="/ingestion">Entrada de dados</NavLink> : null}
+          {me.data?.role === "admin" ? <NavLink to="/users">Usuários</NavLink> : null}
         </nav>
         <button className="button-secondary mt-8 w-full" onClick={onLogout} type="button">
-          Sign out
+
+          Sair
         </button>
       </aside>
       <main className="ml-64 p-6">
@@ -405,7 +418,7 @@ function Layout({ onLogout, actingAs, onActAs }: {
             onClick={() => void syncRouting()}
             type="button"
           >
-            {routingPending > 0 ? "Refreshing…" : "Refresh routing snapshot"}
+            {routingPending > 0 ? "Atualizando…" : "Atualizar rotas"}
           </button>
         </div>
         <RoutingSyncContext.Provider value={syncRouting}>
@@ -449,13 +462,13 @@ function Dashboard() {
   });
 
   return (
-    <Page title="Dashboard">
+    <Page title="Visão geral">
       <MetricGrid metrics={overview.data} />
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <Panel title="Campaigns">
+        <Panel title="Campanhas">
           <div className="text-3xl font-semibold">{campaigns.data?.total ?? 0}</div>
         </Panel>
-        <Panel title="Destinations">
+        <Panel title="Destinos">
           <div className="text-3xl font-semibold">{destinations.data?.total ?? 0}</div>
         </Panel>
       </div>
@@ -476,30 +489,30 @@ function UsersPage({ onActAs }: { onActAs: (user: AuthUser) => Promise<void> }) 
   });
   const columns = useMemo<ColumnDef<AuthUser>[]>(
     () => [
-      { header: "Email", accessorKey: "email" },
-      { header: "Role", accessorKey: "role" },
-      { header: "Status", accessorKey: "status" },
+      { header: "E-mail", accessorKey: "email" },
+      { header: "Perfil", cell: ({ row }) => uiValue(row.original.role) },
+      { header: "Status", cell: ({ row }) => uiValue(row.original.status) },
       {
-        header: "Verified",
-        cell: ({ row }) => (row.original.email_verified ? "Yes" : "No")
+        header: "Verificado",
+        cell: ({ row }) => (row.original.email_verified ? "Sim" : "Não")
       },
       {
-        header: "Actions",
+        header: "Ações",
         cell: ({ row }) =>
           row.original.approved ? (
             <ActionIconButton
-              ariaLabel={`Open workspace for ${row.original.email}`}
+              ariaLabel={`Abrir área de trabalho de ${row.original.email}`}
               icon="workspace"
-              label="Open workspace"
+              label="Abrir área de trabalho"
               onClick={() => {
                 void onActAs(row.original).then(() => navigate("/"));
               }}
             />
           ) : (
             <ActionIconButton
-              ariaLabel={`Approve ${row.original.email}`}
+              ariaLabel={`Aprovar ${row.original.email}`}
               icon="approve"
-              label="Approve user"
+              label="Aprovar usuário"
               onClick={() => approve.mutate(row.original.id)}
             />
           )
@@ -509,7 +522,7 @@ function UsersPage({ onActAs }: { onActAs: (user: AuthUser) => Promise<void> }) 
   );
 
   return (
-    <Page title="Users">
+    <Page title="Usuários">
       {approve.error ? <p className="mb-4 text-sm text-red-700">{approve.error.message}</p> : null}
       <DataTable columns={columns} data={users.data?.items ?? []} />
     </Page>
@@ -517,20 +530,20 @@ function UsersPage({ onActAs }: { onActAs: (user: AuthUser) => Promise<void> }) 
 }
 
 const sourceOptionalMacros = [
-  { label: "Region", param: "geo_region", macro: "[REGION]" },
-  { label: "City", param: "city", macro: "[CITY]" },
-  { label: "Publisher ID", param: "publisher_id", macro: "[PUBLISHER_ID]" },
-  { label: "Site ID", param: "site_id", macro: "[SITE_ID]" },
-  { label: "Creative ID", param: "creative_id", macro: "[CREATIVE_ID]" },
-  { label: "Device", param: "device_type", macro: "[DEVICE]" },
-  { label: "Browser", param: "browser", macro: "[BROWSER]" },
-  { label: "OS", param: "os", macro: "[OS]" },
-  { label: "ISP", param: "isp", macro: "[ISP]" },
-  { label: "Carrier", param: "carrier", macro: "[CARRIER]" },
-  { label: "Connection type", param: "source_connection_type", macro: "[CONNECTION_TYPE]" },
-  { label: "Source campaign ID", param: "source_campaign_id", macro: "[CAMPAIGN_ID]" },
-  { label: "Source campaign name", param: "source_campaign_name", macro: "[CAMPAIGN_NAME]" },
-  { label: "Source IP (raw only)", param: "source_ip", macro: "[IP]" }
+  { label: "Região", param: "geo_region", macro: "[REGION]" },
+  { label: "Cidade", param: "city", macro: "[CITY]" },
+  { label: "ID do publicador", param: "publisher_id", macro: "[PUBLISHER_ID]" },
+  { label: "ID do site", param: "site_id", macro: "[SITE_ID]" },
+  { label: "ID do criativo", param: "creative_id", macro: "[CREATIVE_ID]" },
+  { label: "Dispositivo", param: "device_type", macro: "[DEVICE]" },
+  { label: "Navegador", param: "browser", macro: "[BROWSER]" },
+  { label: "Sistema operacional", param: "os", macro: "[OS]" },
+  { label: "Provedor de internet", param: "isp", macro: "[ISP]" },
+  { label: "Operadora", param: "carrier", macro: "[CARRIER]" },
+  { label: "Tipo de conexão", param: "source_connection_type", macro: "[CONNECTION_TYPE]" },
+  { label: "ID da campanha de origem", param: "source_campaign_id", macro: "[CAMPAIGN_ID]" },
+  { label: "Nome da campanha de origem", param: "source_campaign_name", macro: "[CAMPAIGN_NAME]" },
+  { label: "IP de origem (dado bruto)", param: "source_ip", macro: "[IP]" }
 ] as const;
 
 const legacyTrackingKeys: Record<string, string> = {
@@ -588,14 +601,14 @@ function CampaignCopyLinkAction({ campaign, baseURL }: { campaign: Campaign; bas
   return (
     <>
       <ActionIconButton
-        ariaLabel={`Copy configured tracking URL for ${campaign.name}`}
+        ariaLabel={`Copiar URL de rastreamento de ${campaign.name}`}
         disabled={!url}
         icon="copy"
-        label={copyStatus || (url ? "Copy configured tracking URL" : "Tracker URL unavailable")}
+        label={copyStatus || (url ? "Copiar URL de rastreamento configurada" : "URL do rastreador indisponível")}
         onClick={() => {
           void navigator.clipboard.writeText(url).then(
-            () => setCopyStatus("Copied"),
-            () => setCopyStatus("Copy failed")
+            () => setCopyStatus("Copiado"),
+            () => setCopyStatus("Falha ao copiar")
           );
         }}
       />
@@ -640,53 +653,60 @@ function CampaignLinkBuilder({ campaign, baseURL, onSaved }: {
     mutationFn: () => api.updateTrackingParams(campaign.id, savedParams),
     onSuccess: (updated) => {
       onSaved(updated);
-      setSaveStatus("Parameters saved. The table copy button now uses this URL.");
+      setSaveStatus("Parâmetros salvos. O botão de copiar da tabela agora usa esta URL.");
     }
   });
   return (
     <div className="space-y-5">
       <p className="text-sm text-zinc-600">
-        Copy this URL into your traffic source. The macro placeholders stay readable so the source can substitute their values.
+
+        Copie esta URL para sua fonte de tráfego. As macros permanecem legíveis para que a fonte substitua seus valores.
       </p>
       {campaign.status !== "active" ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          This campaign is {campaign.status}; its tracking link will start redirecting only after activation and a successful routing refresh.
+
+          Esta campanha está {uiValue(campaign.status)}; seu link de rastreamento só redirecionará após a ativação e a atualização das rotas.
         </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block text-sm font-medium">
-          Zone ID
+
+          ID da zona
           <input className="input mt-1" onChange={(event) => setZoneID(event.target.value)} value={zoneID} />
           <span className="mt-1 block text-xs font-normal text-zinc-500">zone_id</span>
         </label>
         <label className="block text-sm font-medium">
-          Country
+
+          País
           <input className="input mt-1" onChange={(event) => setCountry(event.target.value)} value={country} />
           <span className="mt-1 block text-xs font-normal text-zinc-500">geo_country</span>
         </label>
         <label className="block text-sm font-medium">
-          Ad network click ID
+
+          ID do clique na rede de anúncios
           <input className="input mt-1" onChange={(event) => setClickID(event.target.value)} value={clickID} />
-          <span className="mt-1 block text-xs font-normal text-zinc-500">clickid and utm_content</span>
+          <span className="mt-1 block text-xs font-normal text-zinc-500">clickid e utm_content</span>
         </label>
       </div>
       <div className="space-y-1 text-xs text-zinc-600">
-        <p>TraffoFlex generates its own click_id for the destination URL; the source [CLICK_ID] is stored as the external click ID.</p>
-        <p>[COUNTRY] is a country name. Rules that expect a two-letter code such as US will not match it.</p>
+        <p>O TraffoFlex gera seu próprio click_id para a URL de destino; o [CLICK_ID] da fonte é salvo como ID externo do clique.</p>
+        <p>[COUNTRY] contém o nome do país. Regras que esperam um código de duas letras, como US, não corresponderão a esse valor.</p>
         {campaign.traffic_source_id ? (
-          <p>The campaign's traffic source and zone are separate: the source is taken from campaign settings, and the zone is stored as zone_id.</p>
+          <p>A fonte de tráfego e a zona são separadas: a fonte vem da configuração da campanha, e a zona é salva como zone_id.</p>
         ) : null}
       </div>
       <label className="block text-sm font-medium">
-        Cost macro
+
+        Macro de custo
         <input className="input mt-1 font-mono" onChange={event => setCost(event.target.value)} value={cost} placeholder="[CPV_PRICE]" />
         <span className="mt-1 block text-xs font-normal text-zinc-500">
-          cost · Use the price macro supported by your source, for example [CPV_PRICE] for RichAds.
-          {campaign.pricing_model === "cpm" ? " CPM: incoming price ÷ 1000 per click." : " CPC: incoming price per click."}
+
+          cost · Use a macro de preço aceita pela sua fonte, como [CPV_PRICE] no RichAds.
+          {campaign.pricing_model === "cpm" ? " CPM: preço recebido ÷ 1000 por clique." : " CPC: preço recebido por clique."}
         </span>
       </label>
       <details className="rounded-md border border-zinc-200 p-3">
-        <summary className="cursor-pointer text-sm font-medium">Optional source macros</summary>
+        <summary className="cursor-pointer text-sm font-medium">Macros opcionais da fonte</summary>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {sourceOptionalMacros.map((macro) => (
             <div className="rounded border border-zinc-100 p-2" key={macro.param}>
@@ -699,13 +719,15 @@ function CampaignLinkBuilder({ campaign, baseURL, onSaved }: {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-zinc-500">Use macros supported by your traffic source. Edit optional values when its macro names differ.</p>
+        <p className="mt-3 text-xs text-zinc-500">Use macros aceitas pela sua fonte de tráfego. Ajuste os valores opcionais quando os nomes das macros forem diferentes.</p>
         <p className="mt-3 text-xs text-zinc-500">
-          The source IP is stored as raw data and is not trusted as the visitor IP.
+
+          O IP de origem é salvo como dado bruto e não é considerado o IP confiável do visitante.
         </p>
       </details>
       <label className="block text-sm font-medium">
-        Tracking URL
+
+        URL de rastreamento
         <textarea className="input mt-1 min-h-28 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} readOnly value={url} />
       </label>
       <div className="flex items-center gap-3">
@@ -718,26 +740,27 @@ function CampaignLinkBuilder({ campaign, baseURL, onSaved }: {
           }}
           type="button"
         >
-          {save.isPending ? "Saving…" : "Save parameters"}
+          {save.isPending ? "Salvando…" : "Salvar parâmetros"}
         </button>
         <button
           className="button-primary"
           disabled={!url}
           onClick={() => {
             void navigator.clipboard.writeText(url).then(
-              () => setCopyStatus("Copied to clipboard"),
-              () => setCopyStatus("Copy failed; select the URL above")
+              () => setCopyStatus("Copiado para a área de transferência"),
+              () => setCopyStatus("Falha ao copiar; selecione a URL acima")
             );
           }}
           type="button"
         >
-          Copy tracking URL
+
+          Copiar URL de rastreamento
         </button>
         <span aria-live="polite" className="text-sm text-zinc-600">{copyStatus}</span>
       </div>
-      {dirty ? <p className="text-xs text-amber-700">Save parameters to update the copy button in the campaign list.</p> : null}
+      {dirty ? <p className="text-xs text-amber-700">Salve os parâmetros para atualizar o botão de copiar na lista de campanhas.</p> : null}
       {saveStatus ? <p role="status" className="text-sm text-green-700">{saveStatus}</p> : null}
-      {save.error ? <p role="alert" className="text-sm text-red-700">Could not save parameters: {save.error.message}</p> : null}
+      {save.error ? <p role="alert" className="text-sm text-red-700">Não foi possível salvar os parâmetros: {save.error.message}</p> : null}
     </div>
   );
 }
@@ -754,7 +777,7 @@ function CampaignStructureCell({
   failed: boolean;
 }) {
   if (loading) {
-    return <span className="text-sm text-zinc-500">Loading…</span>;
+    return <span className="text-sm text-zinc-500">Carregando…</span>;
   }
   if (failed) {
     return <span className="text-sm text-zinc-500">—</span>;
@@ -844,9 +867,9 @@ function CampaignsPage() {
     }
   });
   const columns: ColumnDef<Campaign>[] = [
-    { header: "Name", accessorKey: "name" },
+    { header: "Nome", accessorKey: "name" },
     {
-      header: "Streams",
+      header: "Fluxos",
       cell: ({ row }) => (
         <CampaignStructureCell
           failed={structure.isError}
@@ -857,7 +880,7 @@ function CampaignsPage() {
       )
     },
     {
-      header: "Destinations",
+      header: "Destinos",
       cell: ({ row }) => (
         <CampaignStructureCell
           failed={structure.isError}
@@ -867,68 +890,68 @@ function CampaignsPage() {
         />
       )
     },
-    { header: "Currency", accessorKey: "currency" },
+    { header: "Moeda", accessorKey: "currency" },
     { header: "Status", accessorKey: "status", cell: ({ row }) => <StatusIndicator status={row.original.status} /> },
     {
-      header: "Actions",
+      header: "Ações",
       cell: ({ row }) => (
         <div className="flex gap-2">
           {row.original.status !== "archived" ? (
             <>
               <CampaignCopyLinkAction campaign={row.original} baseURL={trackerBaseURL} key={row.original.id} />
               <ActionIconButton
-                ariaLabel={`Build tracking URL for ${row.original.name}`}
+                ariaLabel={`Montar URL de rastreamento de ${row.original.name}`}
                 icon="link"
-                label="Build tracking URL"
+                label="Montar URL de rastreamento"
                 onClick={() => setLinkCampaign(row.original)}
               />
             </>
           ) : null}
           <ActionIconButton
-            ariaLabel={`View streams for ${row.original.name}`}
+            ariaLabel={`Ver fluxos de ${row.original.name}`}
             icon="streams"
-            label="View streams"
+            label="Ver fluxos"
             onClick={() => navigate(`/campaigns/${encodeURIComponent(row.original.id)}/streams`)}
           />
           <ActionIconButton
-            ariaLabel={`Open report for ${row.original.name}`}
+            ariaLabel={`Abrir relatório de ${row.original.name}`}
             icon="report"
-            label="Open campaign report"
+            label="Abrir relatório da campanha"
             onClick={() => navigate(`/reports?campaign_id=${encodeURIComponent(row.original.id)}`)}
           />
           {row.original.status === "archived" ? (
             <>
               <ActionIconButton
-                ariaLabel={`Restore campaign ${row.original.name} as paused`}
+                ariaLabel={`Restaurar campanha ${row.original.name} como pausada`}
                 disabled={restoreCampaign.isPending}
                 icon="restore"
-                label="Restore as paused"
+                label="Restaurar como pausada"
                 onClick={() => restoreCampaign.mutate(row.original)}
               />
               <ActionIconButton
-                ariaLabel={`Delete archived campaign ${row.original.name}`}
+                ariaLabel={`Excluir campanha arquivada ${row.original.name}`}
                 danger
                 icon="delete"
-                label="Delete archived campaign"
+                label="Excluir campanha arquivada"
                 onClick={() => setDeleteCandidate(row.original)}
               />
             </>
           ) : (
             <>
               <ActionIconButton
-                ariaLabel={`Edit campaign ${row.original.name}`}
+                ariaLabel={`Editar campanha ${row.original.name}`}
                 icon="edit"
-                label="Edit campaign"
+                label="Editar campanha"
                 onClick={() => {
                   setEditingCampaign(row.original);
                   setCampaignFormOpen(true);
                 }}
               />
               <ActionIconButton
-                ariaLabel={`Archive campaign ${row.original.name}`}
+                ariaLabel={`Arquivar campanha ${row.original.name}`}
                 disabled={archiveCampaign.isPending}
                 icon="archive"
-                label="Archive campaign"
+                label="Arquivar campanha"
                 onClick={() => archiveCampaign.mutate(row.original)}
               />
             </>
@@ -939,14 +962,14 @@ function CampaignsPage() {
   ];
 
   return (
-    <Page title="Campaigns">
+    <Page title="Campanhas">
       {clientConfig.isError ? (
         <p className="mb-4 text-sm text-red-700">
-          {trackerBaseURL ? "Could not load the configured tracker address; showing the local tracker. " : "Tracker URL is unavailable: "}
+          {trackerBaseURL ? "Não foi possível carregar o endereço configurado; exibindo o rastreador local. " : "A URL do rastreador está indisponível: "}
           {clientConfig.error.message}
         </p>
       ) : null}
-      <Panel title="Campaign list">
+      <Panel title="Lista de campanhas">
         <div className="mb-4 flex justify-end">
           <button
             className="button-primary"
@@ -956,10 +979,11 @@ function CampaignsPage() {
             }}
             type="button"
           >
-            Create campaign
+
+            Criar campanha
           </button>
         </div>
-        <div className="mb-4 flex gap-2 border-b border-zinc-200" role="tablist" aria-label="Campaign status">
+        <div className="mb-4 flex gap-2 border-b border-zinc-200" role="tablist" aria-label="Status da campanha">
           <button
             aria-controls="campaigns-tab-panel"
             aria-selected={campaignTab === "current"}
@@ -969,7 +993,8 @@ function CampaignsPage() {
             role="tab"
             type="button"
           >
-            Current ({currentCampaigns.length})
+
+            Atuais ({currentCampaigns.length})
           </button>
           <button
             aria-controls="campaigns-tab-panel"
@@ -980,7 +1005,8 @@ function CampaignsPage() {
             role="tab"
             type="button"
           >
-            Archive ({archivedCampaigns.length})
+
+            Arquivadas ({archivedCampaigns.length})
           </button>
         </div>
         {archiveCampaign.error || restoreCampaign.error || structure.error ? (
@@ -993,10 +1019,10 @@ function CampaignsPage() {
           id="campaigns-tab-panel"
           role="tabpanel"
         >
-          {campaigns.isPending ? <p className="text-sm text-zinc-500">Loading campaigns…</p> : null}
+          {campaigns.isPending ? <p className="text-sm text-zinc-500">Carregando campanhas…</p> : null}
           {campaigns.isError ? <p role="alert" className="text-sm text-red-700">{campaigns.error.message}</p> : null}
           {campaigns.isSuccess && visibleCampaigns.length === 0 ? (
-            <p className="text-sm text-zinc-500">{campaignTab === "archive" ? "No archived campaigns." : "No current campaigns."}</p>
+            <p className="text-sm text-zinc-500">{campaignTab === "archive" ? "Nenhuma campanha arquivada." : "Nenhuma campanha atual."}</p>
           ) : null}
           {visibleCampaigns.length > 0 ? <DataTable columns={columns} data={visibleCampaigns} /> : null}
         </div>
@@ -1007,7 +1033,7 @@ function CampaignsPage() {
           setEditingCampaign(null);
         }}
         open={campaignFormOpen}
-        title={editingCampaign ? "Edit campaign" : "Create campaign"}
+        title={editingCampaign ? "Editar campanha" : "Criar campanha"}
       >
         <CampaignForm
           initial={editingCampaign}
@@ -1019,13 +1045,13 @@ function CampaignsPage() {
             }
             createCampaign.mutate(data);
           }}
-          submitLabel={editingCampaign ? "Save" : "Create"}
+          submitLabel={editingCampaign ? "Salvar" : "Criar"}
         />
       </Modal>
       <Modal
         onClose={() => setLinkCampaign(null)}
         open={linkCampaign !== null}
-        title={linkCampaign ? `Tracking URL: ${linkCampaign.name}` : "Tracking URL"}
+        title={linkCampaign ? `URL de rastreamento: ${linkCampaign.name}` : "URL de rastreamento"}
       >
         {linkCampaign ? (
           trackerBaseURL ? (
@@ -1046,9 +1072,10 @@ function CampaignsPage() {
             />
           ) : (
             <div className="space-y-3 text-sm">
-              <p>Tracker address is unavailable. Reload its configuration to build the tracking URL.</p>
+              <p>O endereço do rastreador está indisponível. Recarregue a configuração para montar a URL de rastreamento.</p>
               <button className="button-primary" onClick={() => void clientConfig.refetch()} type="button">
-                Reload tracker address
+
+                Recarregar endereço do rastreador
               </button>
             </div>
           )
@@ -1057,14 +1084,14 @@ function CampaignsPage() {
       <Modal
         onClose={() => setDeleteCandidate(null)}
         open={deleteCandidate !== null}
-        title="Delete archived campaign"
+        title="Excluir campanha arquivada"
       >
         <div className="space-y-4 text-sm">
-          <p>Delete <strong>{deleteCandidate?.name}</strong> permanently? This cannot be undone.</p>
-          <p className="text-zinc-600">Linked streams and historical analytics remain in storage.</p>
+          <p>Excluir <strong>{deleteCandidate?.name}</strong>  permanentemente? Esta ação não pode ser desfeita.</p>
+          <p className="text-zinc-600">Os fluxos vinculados e o histórico de análises permanecerão armazenados.</p>
           {deleteCampaign.error ? <p role="alert" className="text-red-700">{deleteCampaign.error.message}</p> : null}
           <div className="flex justify-end gap-2">
-            <button className="button-secondary" onClick={() => setDeleteCandidate(null)} type="button">Cancel</button>
+            <button className="button-secondary" onClick={() => setDeleteCandidate(null)} type="button">Cancelar</button>
             <button
               className="rounded-md bg-red-700 px-4 py-2 font-medium text-white hover:bg-red-800 disabled:opacity-50"
               disabled={deleteCampaign.isPending || deleteCandidate === null}
@@ -1075,7 +1102,7 @@ function CampaignsPage() {
               }}
               type="button"
             >
-              {deleteCampaign.isPending ? "Deleting…" : "Delete permanently"}
+              {deleteCampaign.isPending ? "Excluindo…" : "Excluir permanentemente"}
             </button>
           </div>
         </div>
@@ -1106,13 +1133,14 @@ function CampaignStreamsPage() {
   });
 
   return (
-    <Page title="Streams">
+    <Page title="Fluxos">
       <Link className="button-secondary mb-4 inline-flex" to="/campaigns">
-        ← Back to campaigns
+
+        ← Voltar às campanhas
       </Link>
-      {campaign.isPending ? <p className="text-sm text-zinc-500">Loading campaign…</p> : null}
+      {campaign.isPending ? <p className="text-sm text-zinc-500">Carregando campanha…</p> : null}
       {campaign.isError ? (
-        <p className="text-sm text-red-700">Could not load campaign: {campaign.error.message}</p>
+        <p className="text-sm text-red-700">Não foi possível carregar a campanha: {campaign.error.message}</p>
       ) : null}
       {campaign.data ? (
         <Panel title={campaign.data.name}>
@@ -1160,7 +1188,7 @@ function CampaignForm({
         };
         const parsed = campaignSchema.safeParse(payload);
         if (!parsed.success) {
-          setFormError(parsed.error.issues[0]?.message ?? "Invalid campaign");
+          setFormError(parsed.error.issues[0]?.message ?? "Campanha inválida");
           return;
         }
         setFormError("");
@@ -1168,35 +1196,38 @@ function CampaignForm({
       })}
     >
       {formError ? <p className="text-sm text-red-700">{formError}</p> : null}
-      <TextField label="Name" register={form.register("name")} />
-      <TextField label="Slug" register={form.register("slug")} />
-      <TextField label="Currency" register={form.register("currency")} />
+      <TextField label="Nome" register={form.register("name")} />
+      <TextField label="Identificador da URL" register={form.register("slug")} />
+      <TextField label="Moeda" register={form.register("currency")} />
       <label className="block text-sm font-medium">
-        Pricing model
+
+        Modelo de cobrança
         <select className="input mt-1" {...form.register("pricing_model")}>
-          <option value="cpc">CPC · per click</option>
-          <option value="cpm">CPM · per 1000</option>
+          <option value="cpc">CPC · por clique</option>
+          <option value="cpm">CPM · por mil</option>
         </select>
       </label>
       <p className="text-xs text-zinc-500">
-        {form.watch("pricing_model") === "cpm" ? "Click expense = incoming cost ÷ 1000." : "Click expense = incoming cost."}
-        {" "}Set the cost macro in Tracking URL builder. Changes apply to new clicks.
+        {form.watch("pricing_model") === "cpm" ? "Custo por clique = custo recebido ÷ 1000." : "Custo por clique = custo recebido."}
+        {" "}Defina a macro de custo no gerador de URL de rastreamento. As alterações valem para novos cliques.
       </p>
       <SelectField label="Status" options={statusOptions} register={form.register("status")} />
       <label className="flex items-center gap-2 text-sm font-medium">
         <input type="checkbox" {...form.register("trafficback_config.enabled")} />
-        Send traffic to trafficback when no destination is available
+
+        Enviar tráfego para a URL de retorno quando não houver destino disponível
       </label>
       {trafficbackEnabled ? (
         <div className="space-y-3">
-          <TextField label="Trafficback URL" register={form.register("trafficback_config.url")} />
+          <TextField label="URL de retorno de tráfego" register={form.register("trafficback_config.url")} />
           <TextField
-            label="Maximum trafficback depth"
+            label="Máximo de retornos de tráfego"
             register={form.register("trafficback_config.max_depth", { valueAsNumber: true })}
             type="number"
           />
           <p className="text-xs text-zinc-500">
-            Add trafficback_depth={"{trafficback_depth}"} to the URL if it can return to this campaign.
+
+            Adicione trafficback_depth={"{trafficback_depth}"}  à URL se ela puder retornar a esta campanha.
           </p>
         </div>
       ) : null}
@@ -1277,35 +1308,35 @@ function StreamsManager({ campaign }: { campaign: Campaign }) {
   });
   const columns = useMemo<ColumnDef<Stream>[]>(
     () => [
-      { header: "Name", accessorKey: "name" },
-      { header: "Priority", accessorKey: "priority" },
+      { header: "Nome", accessorKey: "name" },
+      { header: "Prioridade", accessorKey: "priority" },
       { header: "Status", accessorKey: "status", cell: ({ row }) => <StatusIndicator status={row.original.status} /> },
       {
-        header: "Rules",
+        header: "Regras",
         cell: ({ row }) => row.original.conditions.length
       },
       {
-        header: "Distribution",
-        cell: ({ row }) => row.original.distribution.mode
+        header: "Distribuição",
+        cell: ({ row }) => uiValue(row.original.distribution.mode)
       },
       {
-        header: "Actions",
+        header: "Ações",
         cell: ({ row }) => (
           <div className="flex gap-2">
             <ActionIconButton
-              ariaLabel={`Edit stream ${row.original.name}`}
+              ariaLabel={`Editar fluxo ${row.original.name}`}
               icon="edit"
-              label="Edit stream"
+              label="Editar fluxo"
               onClick={() => {
                 setEditingStream(row.original);
                 setStreamFormOpen(true);
               }}
             />
             <ActionIconButton
-              ariaLabel={`Delete stream ${row.original.name}`}
+              ariaLabel={`Excluir fluxo ${row.original.name}`}
               danger
               icon="delete"
-              label="Delete stream"
+              label="Excluir fluxo"
               onClick={() => deleteStream.mutate(row.original.id)}
             />
           </div>
@@ -1326,7 +1357,8 @@ function StreamsManager({ campaign }: { campaign: Campaign }) {
           }}
           type="button"
         >
-          Add stream
+
+          Adicionar fluxo
         </button>
       </div>
       <DataTable columns={columns} data={streams.data?.items ?? []} />
@@ -1336,7 +1368,7 @@ function StreamsManager({ campaign }: { campaign: Campaign }) {
           setEditingStream(null);
         }}
         open={streamFormOpen}
-        title={editingStream ? "Edit stream" : "Create stream"}
+        title={editingStream ? "Editar fluxo" : "Criar fluxo"}
       >
         <StreamForm
           destinations={destinations.data?.items ?? []}
@@ -1353,7 +1385,7 @@ function StreamsManager({ campaign }: { campaign: Campaign }) {
             }
             createStream.mutate(data);
           }}
-          submitLabel={editingStream ? "Save stream" : "Add stream"}
+          submitLabel={editingStream ? "Salvar fluxo" : "Adicionar fluxo"}
         />
       </Modal>
     </>
@@ -1439,7 +1471,7 @@ function StreamForm({
         try {
           streamSchema.parse(payload);
         } catch (err) {
-          setFormError(err instanceof Error ? err.message : "Invalid stream");
+          setFormError(err instanceof Error ? err.message : "Fluxo inválido");
           return;
         }
         onSubmit(payload);
@@ -1447,9 +1479,9 @@ function StreamForm({
     >
       {formError ? <p className="text-sm text-red-700">{formError}</p> : null}
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Name" register={form.register("name")} />
+        <TextField label="Nome" register={form.register("name")} />
         <TextField
-          label="Priority"
+          label="Prioridade"
           register={form.register(
             "priority",
             { valueAsNumber: true }
@@ -1457,12 +1489,12 @@ function StreamForm({
           type="number"
         />
         <SelectField label="Status" options={statusOptions} register={form.register("status")} />
-        <SelectField label="Distribution" options={distributionOptions} register={form.register("distribution.mode")} />
+        <SelectField label="Distribuição" options={distributionOptions} register={form.register("distribution.mode")} />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Rules</h3>
+          <h3 className="text-sm font-semibold">Regras</h3>
           <button
             className="button-secondary"
             onClick={() => setConditions([
@@ -1475,14 +1507,15 @@ function StreamForm({
             ])}
             type="button"
           >
-            Add rule
+
+            Adicionar regra
           </button>
         </div>
         <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs font-semibold uppercase text-zinc-500">
-          <span>Field</span>
-          <span>Operator</span>
-          <span>Value</span>
-          <span>Action</span>
+          <span>Campo</span>
+          <span>Operador</span>
+          <span>Valor</span>
+          <span>Ação</span>
         </div>
         {conditions.map((condition, index) => (
           <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2" key={index}>
@@ -1498,7 +1531,7 @@ function StreamForm({
             >
               {conditionFields.map((field) => (
                 <option key={field} value={field}>
-                  {field}
+                  {uiValue(field)}
                 </option>
               ))}
             </select>
@@ -1514,7 +1547,7 @@ function StreamForm({
             >
               {conditionOperators.map((operator) => (
                 <option key={operator} value={operator}>
-                  {operator}
+                  {uiValue(operator)}
                 </option>
               ))}
             </select>
@@ -1527,14 +1560,14 @@ function StreamForm({
                 index,
                 { value: event.target.value }
               )}
-              placeholder={condition.operator === "in" || condition.operator === "not_in" ? "a,b,c" : "value"}
+              placeholder={condition.operator === "in" || condition.operator === "not_in" ? "a,b,c" : "valor"}
               value={condition.values?.join(",") ?? condition.value ?? ""}
             />
             <ActionIconButton
-              ariaLabel={`Remove rule ${index + 1}`}
+              ariaLabel={`Remover regra ${index + 1}`}
               danger
               icon="remove"
-              label="Remove rule"
+              label="Remover regra"
               onClick={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))}
             />
           </div>
@@ -1543,7 +1576,7 @@ function StreamForm({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Destinations</h3>
+          <h3 className="text-sm font-semibold">Destinos</h3>
           <button
             className="button-secondary"
             onClick={() => setTargets([
@@ -1555,7 +1588,8 @@ function StreamForm({
             ])}
             type="button"
           >
-            Add destination
+
+            Adicionar destino
           </button>
         </div>
         {targets.map((target, index) => (
@@ -1570,7 +1604,7 @@ function StreamForm({
               )}
               value={target.destination_id}
             >
-              <option value="">Select destination</option>
+              <option value="">Selecionar destino</option>
               {destinations.map((destination) => (
                 <option key={destination.id} value={destination.id}>
                   {destination.name}
@@ -1590,10 +1624,10 @@ function StreamForm({
               value={target.weight}
             />
             <ActionIconButton
-              ariaLabel={`Remove destination ${index + 1} from stream`}
+              ariaLabel={`Remover destino ${index + 1} do fluxo`}
               danger
               icon="remove"
-              label="Remove destination"
+              label="Remover destino"
               onClick={() => setTargets(targets.filter((_, itemIndex) => itemIndex !== index))}
             />
           </div>
@@ -1606,13 +1640,14 @@ function StreamForm({
           onChange={(event) => setUniqueEnabled(event.target.checked)}
           type="checkbox"
         />
-        Unique destination routing
+
+        Roteamento para destinos únicos
       </label>
       {uniqueEnabled ? (
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="User key" register={form.register("distribution.unique_policy.user_key")} />
+          <TextField label="Chave do usuário" register={form.register("distribution.unique_policy.user_key")} />
           <TextField
-            label="History window hours"
+            label="Janela do histórico (horas)"
             register={form.register(
               "distribution.unique_policy.history_window_hours",
               { valueAsNumber: true }
@@ -1620,7 +1655,7 @@ function StreamForm({
             type="number"
           />
           <SelectField
-            label="Exhausted mode"
+            label="Ao esgotar os destinos"
             options={[
               "allow_repeat",
               "no_destination"
@@ -1628,7 +1663,7 @@ function StreamForm({
             register={form.register("distribution.unique_policy.exhausted_mode")}
           />
           <SelectField
-            label="Selection strategy"
+            label="Estratégia de seleção"
             options={[
               "waterfall",
               "round_robin",
@@ -1637,7 +1672,7 @@ function StreamForm({
             register={form.register("distribution.unique_policy.selection_strategy")}
           />
           <TextField
-            label="ROI window hours"
+            label="Janela do ROI (horas)"
             register={form.register(
               "distribution.unique_policy.roi_window_hours",
               { valueAsNumber: true }
@@ -1645,7 +1680,7 @@ function StreamForm({
             type="number"
           />
           <TextField
-            label="Min clicks"
+            label="Mínimo de cliques"
             register={form.register(
               "distribution.unique_policy.min_clicks",
               { valueAsNumber: true }
@@ -1653,7 +1688,7 @@ function StreamForm({
             type="number"
           />
           <SelectField
-            label="Fallback strategy"
+            label="Estratégia alternativa"
             options={[
               "waterfall",
               "round_robin",
@@ -1670,7 +1705,8 @@ function StreamForm({
         </button>
         {initial ? (
           <button className="button-secondary" onClick={onCancel} type="button">
-            Cancel
+
+            Cancelar
           </button>
         ) : null}
       </div>
@@ -1689,7 +1725,7 @@ function DestinationHealthIndicator({ status }: { status: HealthStatus }) {
   return (
     <span className="inline-flex items-center gap-2">
       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${destinationHealthColors[status]}`} aria-hidden="true" />
-      <span className="capitalize">{status}</span>
+      <span className="capitalize">{uiValue(status)}</span>
     </span>
   );
 }
@@ -1742,38 +1778,38 @@ function DestinationsPage() {
   });
   const columns = useMemo<ColumnDef<Destination>[]>(
     () => [
-      { header: "Name", accessorKey: "name" },
+      { header: "Nome", accessorKey: "name" },
       { header: "URL", accessorKey: "url" },
       { header: "Manual", accessorKey: "manual_status", cell: ({ row }) => <StatusIndicator status={row.original.manual_status} /> },
       {
-        header: "Health",
+        header: "Disponibilidade",
         cell: ({ row }) => <DestinationHealthIndicator status={row.original.health_status} />
       },
       {
-        header: "Actions",
+        header: "Ações",
         cell: ({ row }) => (
           <div className="flex gap-2">
             <ActionIconButton
-              ariaLabel={`Check health of ${row.original.name}`}
+              ariaLabel={`Verificar disponibilidade de ${row.original.name}`}
               disabled={triggerHealthcheck.isPending}
               icon="check"
-              label="Check health"
+              label="Verificar disponibilidade"
               onClick={() => triggerHealthcheck.mutate(row.original.id)}
             />
             <ActionIconButton
-              ariaLabel={`Edit destination ${row.original.name}`}
+              ariaLabel={`Editar destino ${row.original.name}`}
               icon="edit"
-              label="Edit destination"
+              label="Editar destino"
               onClick={() => {
                 setEditingDestination(row.original);
                 setDestinationFormOpen(true);
               }}
             />
             <ActionIconButton
-              ariaLabel={`Delete destination ${row.original.name}`}
+              ariaLabel={`Excluir destino ${row.original.name}`}
               danger
               icon="delete"
-              label="Delete destination"
+              label="Excluir destino"
               onClick={() => deleteDestination.mutate(row.original.id)}
             />
           </div>
@@ -1787,19 +1823,19 @@ function DestinationsPage() {
   );
 
   return (
-    <Page title="Destinations">
+    <Page title="Destinos">
       {healthcheckResult ? (
         <p className="mb-4 text-sm" aria-live="polite">
-          Probe {destinations.data?.items.find(destination => destination.id === healthcheckResult.destination_id)?.name ?? healthcheckResult.destination_id}: {healthcheckResult.status}
+
+          Verificação {destinations.data?.items.find(destination => destination.id === healthcheckResult.destination_id)?.name ?? healthcheckResult.destination_id}: {uiValue(healthcheckResult.status)}
           {healthcheckResult.probe_status_code ? ` (HTTP ${healthcheckResult.probe_status_code})` : ""}
-          {healthcheckResult.error ? ` — ${healthcheckResult.error}` : ""}.
-          Failures: {healthcheckResult.consecutive_failures}; successes: {healthcheckResult.consecutive_successes}.
+          {healthcheckResult.error ? ` — ${healthcheckResult.error}` : ""}. Falhas: {healthcheckResult.consecutive_failures}; sucessos: {healthcheckResult.consecutive_successes}.
         </p>
       ) : null}
       {triggerHealthcheck.isError ? (
-        <p className="mb-4 text-sm text-red-700" aria-live="polite">Probe failed: {triggerHealthcheck.error.message}</p>
+        <p className="mb-4 text-sm text-red-700" aria-live="polite">Falha na verificação: {triggerHealthcheck.error.message}</p>
       ) : null}
-      <Panel title="Destination list">
+      <Panel title="Lista de destinos">
         <div className="mb-4 flex justify-end">
           <button
             className="button-primary"
@@ -1809,7 +1845,8 @@ function DestinationsPage() {
             }}
             type="button"
           >
-            Create destination
+
+            Criar destino
           </button>
         </div>
         <DataTable columns={columns} data={destinations.data?.items ?? []} />
@@ -1820,7 +1857,7 @@ function DestinationsPage() {
           setEditingDestination(null);
         }}
         open={destinationFormOpen}
-        title={editingDestination ? "Edit destination" : "Create destination"}
+        title={editingDestination ? "Editar destino" : "Criar destino"}
       >
         <DestinationForm
           initial={editingDestination}
@@ -1832,7 +1869,7 @@ function DestinationsPage() {
             }
             createDestination.mutate(data);
           }}
-          submitLabel={editingDestination ? "Save" : "Create"}
+          submitLabel={editingDestination ? "Salvar" : "Criar"}
         />
       </Modal>
     </Page>
@@ -1903,7 +1940,7 @@ function DestinationForm({
         try {
           destinationSchema.parse(payload);
         } catch (err) {
-          setFormError(err instanceof Error ? err.message : "Invalid destination");
+          setFormError(err instanceof Error ? err.message : "Destino inválido");
           return;
         }
         onSubmit(payload);
@@ -1911,11 +1948,11 @@ function DestinationForm({
       })}
     >
       {formError ? <p className="text-sm text-red-700">{formError}</p> : null}
-      <TextField label="Name" register={form.register("name")} />
+      <TextField label="Nome" register={form.register("name")} />
       <TextField label="URL" register={form.register("url")} />
-      <TextField label="Healthcheck URL (optional, required for macro URLs or GET checks)" register={form.register("healthcheck_url")} />
-      <SelectField label="Manual status" options={statusOptions} register={form.register("manual_status")} />
-      <SelectField label="Redirect" options={["http_302", "meta_refresh", "javascript", "interstitial"]} register={form.register("redirect.mode")} />
+      <TextField label="URL de verificação (opcional; obrigatória para URLs com macros ou verificações GET)" register={form.register("healthcheck_url")} />
+      <SelectField label="Status manual" options={statusOptions} register={form.register("manual_status")} />
+      <SelectField label="Redirecionamento" options={["http_302", "meta_refresh", "javascript", "interstitial"]} register={form.register("redirect.mode")} />
       <DestinationScheduleEditor schedule={schedule} setSchedule={setSchedule} />
       <DestinationCapsEditor caps={caps} setCaps={setCaps} />
       <button className="button-primary" type="submit">
@@ -1945,7 +1982,8 @@ function DestinationScheduleEditor({
             })}
             type="checkbox"
           />
-          Schedule
+
+          Agendamento
         </label>
         <button
           className="button-secondary"
@@ -1970,11 +2008,12 @@ function DestinationScheduleEditor({
           })}
           type="button"
         >
-          Add window
+
+          Adicionar intervalo
         </button>
       </div>
       <FilterInput
-        label="Timezone"
+        label="Fuso horário"
         onChange={(value) => setSchedule({
           ...schedule,
           timezone: value
@@ -1985,7 +2024,7 @@ function DestinationScheduleEditor({
         <div className="space-y-2 rounded-md bg-zinc-50 p-2" key={index}>
           <div className="grid grid-cols-2 gap-2">
             <FilterInput
-              label="Start"
+              label="Início"
               onChange={(value) => updateScheduleWindow(
                 schedule,
                 setSchedule,
@@ -1996,7 +2035,7 @@ function DestinationScheduleEditor({
               value={window.start_time}
             />
             <FilterInput
-              label="End"
+              label="Fim"
               onChange={(value) => updateScheduleWindow(
                 schedule,
                 setSchedule,
@@ -2028,15 +2067,15 @@ function DestinationScheduleEditor({
                   }}
                   type="checkbox"
                 />
-                {weekday}
+                {uiValue(weekday)}
               </label>
             ))}
           </div>
           <ActionIconButton
-            ariaLabel={`Remove schedule window ${index + 1}`}
+            ariaLabel={`Remover intervalo ${index + 1}`}
             danger
             icon="remove"
-            label="Remove window"
+            label="Remover intervalo"
             onClick={() => setSchedule({
               ...schedule,
               windows: windows.filter((_, itemIndex) => itemIndex !== index)
@@ -2068,7 +2107,8 @@ function DestinationCapsEditor({
             })}
             type="checkbox"
           />
-          Caps
+
+          Limites
         </label>
         <button
           className="button-secondary"
@@ -2086,7 +2126,8 @@ function DestinationCapsEditor({
           })}
           type="button"
         >
-          Add cap
+
+          Adicionar limite
         </button>
       </div>
       {rules.map((rule, index) => (
@@ -2108,7 +2149,7 @@ function DestinationCapsEditor({
               "revenue"
             ].map((metric) => (
               <option key={metric} value={metric}>
-                {metric}
+                {uiValue(metric)}
               </option>
             ))}
           </select>
@@ -2137,10 +2178,10 @@ function DestinationCapsEditor({
             value={rule.limit}
           />
           <ActionIconButton
-            ariaLabel={`Remove cap rule ${index + 1}`}
+            ariaLabel={`Remover regra de limite ${index + 1}`}
             danger
             icon="remove"
-            label="Remove cap rule"
+            label="Remover regra de limite"
             onClick={() => setCaps({
               ...caps,
               rules: rules.filter((_, itemIndex) => itemIndex !== index)
@@ -2176,8 +2217,8 @@ function CopyablePostbackURL({ label, value, disabled = false }: { label: string
     <label className="block text-sm font-medium">{label}</label>
     <textarea className="input min-h-20 w-full font-mono text-xs" readOnly value={value} aria-label={label} />
     <button type="button" className="button-secondary" disabled={!value || disabled} onClick={() => {
-      void navigator.clipboard.writeText(value).then(() => setMessage("Copied"), () => setMessage("Copy failed. Select and copy the URL manually."));
-    }}>Copy URL</button>
+      void navigator.clipboard.writeText(value).then(() => setMessage("Copiado"), () => setMessage("Falha ao copiar. Selecione e copie a URL manualmente."));
+    }}>Copiar URL</button>
     <span className="ml-2 text-xs text-zinc-600" aria-live="polite">{message}</span>
   </div>;
 }
@@ -2279,107 +2320,107 @@ function PostbacksPage() {
   const base = clientConfig.data?.postback_base_url ?? "";
   const preview = incomingPostbackURL(base, { network_id: values.network_id ?? "", secret: values.secret, mapping: { click_id: values.click_macro?.trim() ?? "cid", transaction_id: values.transaction_macro?.trim() ?? "", payout: values.payout_macro?.trim() ?? "sum", status: values.status_macro?.trim() ?? "", currency: values.currency?.trim().toUpperCase() ?? "USD" } });
   const templateColumns: ColumnDef<PostbackTemplate>[] = [
-    { header: "Name", accessorKey: "name" },
-    { header: "Integration", cell: ({ row }) => row.original.direction === "outgoing" ? (row.original.enabled ? "Enabled" : "Paused") : networks.data?.items.find(network => network.id === row.original.network_id)?.name ?? row.original.network_id },
-    { header: "Scope", cell: ({ row }) => row.original.direction !== "outgoing" ? "This workspace" : [sources.data?.items.find(source => source.id === row.original.source_id)?.name ?? row.original.source_id, campaigns.data?.items.find(campaign => campaign.id === row.original.campaign_id)?.name ?? row.original.campaign_id].filter(Boolean).join(" / ") || "Global (this workspace)" },
-    { header: "Actions", cell: ({ row }) => <div className="flex gap-2">
-      <ActionIconButton icon="edit" label="Configure postback" onClick={() => begin(row.original)} />
-      <ActionIconButton icon="delete" danger label="Delete postback" onClick={() => { if (window.confirm(`Delete ${row.original.name}?`)) remove.mutate(row.original.id); }} />
+    { header: "Nome", accessorKey: "name" },
+    { header: "Integração", cell: ({ row }) => row.original.direction === "outgoing" ? (row.original.enabled ? "Ativado" : "Pausado") : networks.data?.items.find(network => network.id === row.original.network_id)?.name ?? row.original.network_id },
+    { header: "Abrangência", cell: ({ row }) => row.original.direction !== "outgoing" ? "Esta área de trabalho" : [sources.data?.items.find(source => source.id === row.original.source_id)?.name ?? row.original.source_id, campaigns.data?.items.find(campaign => campaign.id === row.original.campaign_id)?.name ?? row.original.campaign_id].filter(Boolean).join(" / ") || "Global (esta área de trabalho)" },
+    { header: "Ações", cell: ({ row }) => <div className="flex gap-2">
+      <ActionIconButton icon="edit" label="Configurar postback" onClick={() => begin(row.original)} />
+      <ActionIconButton icon="delete" danger label="Excluir postback" onClick={() => { if (window.confirm(`Excluir ${row.original.name}?`)) remove.mutate(row.original.id); }} />
     </div> }
   ];
   const logColumns: ColumnDef<PostbackLogRow>[] = [
-    { accessorKey: "created_at", header: () => <button type="button" className="inline-flex items-center gap-1 hover:text-zinc-900" aria-label={`Sort by time · ${logFilters.order === "desc" ? "newest first" : "oldest first"}`} onClick={() => setLogFilters(current => ({ ...current, order: current.order === "desc" ? "asc" : "desc", offset: 0 }))}>Created {logFilters.order === "desc" ? "↓" : "↑"}</button>, cell: ({ row }) => <time dateTime={row.original.created_at} title={row.original.created_at}>{new Date(row.original.created_at).toLocaleString()}</time> },
-    { header: "Postback", cell: ({ row }) => <span title={`Request ID: ${row.original.postback_id}${row.original.template_id ? ` · Integration ID: ${row.original.template_id}` : ""}`}>{row.original.template_name || templates.data?.items.find(template => template.id === row.original.template_id)?.name || "Unknown integration"}</span> },
-    { header: "Network", cell: ({ row }) => <span title={row.original.network_id}>{networks.data?.items.find(network => network.id === row.original.network_id)?.name ?? row.original.network_id}</span> },
-    { header: "Payout", cell: ({ row }) => row.original.payout == null ? "—" : <span className="whitespace-nowrap tabular-nums">{row.original.payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {row.original.currency}</span> },
-    { header: "Click", accessorKey: "click_id" },
-    { header: "Transaction", accessorKey: "transaction_id" }, { header: "Status", accessorKey: "status" }, { header: "Error", accessorKey: "error" }
+    { accessorKey: "created_at", header: () => <button type="button" className="inline-flex items-center gap-1 hover:text-zinc-900" aria-label={`Ordenar por data · ${logFilters.order === "desc" ? "mais recentes primeiro" : "mais antigos primeiro"}`} onClick={() => setLogFilters(current => ({ ...current, order: current.order === "desc" ? "asc" : "desc", offset: 0 }))}>Criado em {logFilters.order === "desc" ? "↓" : "↑"}</button>, cell: ({ row }) => <time dateTime={row.original.created_at} title={row.original.created_at}>{new Date(row.original.created_at).toLocaleString("pt-BR")}</time> },
+    { header: "Postback", cell: ({ row }) => <span title={`ID da solicitação: ${row.original.postback_id}${row.original.template_id ? ` · ID da integração: ${row.original.template_id}` : ""}`}>{row.original.template_name || templates.data?.items.find(template => template.id === row.original.template_id)?.name || "Integração desconhecida"}</span> },
+    { header: "Rede", cell: ({ row }) => <span title={row.original.network_id}>{networks.data?.items.find(network => network.id === row.original.network_id)?.name ?? row.original.network_id}</span> },
+    { header: "Valor da conversão", cell: ({ row }) => row.original.payout == null ? "—" : <span className="whitespace-nowrap tabular-nums">{row.original.payout.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {row.original.currency}</span> },
+    { header: "Clique", accessorKey: "click_id" },
+    { header: "Transação", accessorKey: "transaction_id" }, { header: "Status", cell: ({ row }) => uiValue(row.original.status) }, { header: "Erro", accessorKey: "error" }
   ];
   const deliveryColumns: ColumnDef<OutboundPostbackJob>[] = [
-    { header: "Created", cell: ({ row }) => new Date(row.original.created_at).toLocaleString() },
+    { header: "Criado em", cell: ({ row }) => new Date(row.original.created_at).toLocaleString("pt-BR") },
     { header: "Postback", cell: ({ row }) => <span title={row.original.template_id}>{templates.data?.items.find(template => template.id === row.original.template_id)?.name ?? row.original.template_id}</span> },
-    { header: "Click", accessorKey: "click_id" }, { header: "Status", accessorKey: "status" },
-    { header: "Attempts", accessorKey: "attempts" }, { header: "HTTP", cell: ({ row }) => row.original.http_status || "—" }, { header: "Error", accessorKey: "error" }
+    { header: "Clique", accessorKey: "click_id" }, { header: "Status", cell: ({ row }) => uiValue(row.original.status) },
+    { header: "Tentativas", accessorKey: "attempts" }, { header: "HTTP", cell: ({ row }) => row.original.http_status || "—" }, { header: "Erro", accessorKey: "error" }
   ];
   const error = save.error || remove.error || templates.error || networks.error || clientConfig.error || (tab === "incoming" ? logs.error : deliveries.error || sources.error || campaigns.error);
   return <Page title="Postbacks">
-    <p className="mb-4 text-sm text-zinc-600">Affiliate network → TraffoFlex → traffic source. Keep our click ID and the traffic source's click ID separate.</p>
-    <div className="mb-4 flex gap-2" role="tablist" aria-label="Postback direction">
-      <button type="button" role="tab" aria-selected={tab === "incoming"} className={tab === "incoming" ? "button-primary" : "button-secondary"} onClick={() => setTab("incoming")}>Incoming · affiliate networks</button>
-      <button type="button" role="tab" aria-selected={tab === "outgoing"} className={tab === "outgoing" ? "button-primary" : "button-secondary"} onClick={() => setTab("outgoing")}>Outgoing · traffic sources</button>
+    <p className="mb-4 text-sm text-zinc-600">Rede de afiliados → TraffoFlex → fonte de tráfego. Mantenha separados nosso ID de clique e o ID da fonte de tráfego.</p>
+    <div className="mb-4 flex gap-2" role="tablist" aria-label="Direção do postback">
+      <button type="button" role="tab" aria-selected={tab === "incoming"} className={tab === "incoming" ? "button-primary" : "button-secondary"} onClick={() => setTab("incoming")}>Entrada · redes de afiliados</button>
+      <button type="button" role="tab" aria-selected={tab === "outgoing"} className={tab === "outgoing" ? "button-primary" : "button-secondary"} onClick={() => setTab("outgoing")}>Saída · fontes de tráfego</button>
     </div>
-    {error ? <p className="mb-3 text-sm text-red-700" role="alert">{error instanceof Error ? error.message : "Failed to load postbacks"}</p> : null}
-    <Panel title={tab === "incoming" ? "Receive conversions" : "Send conversions"}>
-      <p className="mb-3 text-sm text-zinc-600">{tab === "incoming" ? "Create an integration, then copy its Postback URL into the affiliate network's settings." : "Send approved conversions by HTTP GET. Choose a source or campaign, or use Global for this workspace."}</p>
-      <button type="button" className="button-primary mb-4" onClick={() => begin(null)}>Create postback</button>
+    {error ? <p className="mb-3 text-sm text-red-700" role="alert">{error instanceof Error ? error.message : "Não foi possível carregar os postbacks"}</p> : null}
+    <Panel title={tab === "incoming" ? "Receber conversões" : "Enviar conversões"}>
+      <p className="mb-3 text-sm text-zinc-600">{tab === "incoming" ? "Crie uma integração e copie sua URL de postback para as configurações da rede de afiliados." : "Envie conversões aprovadas por HTTP GET. Escolha uma fonte ou campanha, ou use Global para esta área de trabalho."}</p>
+      <button type="button" className="button-primary mb-4" onClick={() => begin(null)}>Criar postback</button>
       <DataTable columns={templateColumns} data={templates.data?.items.filter(template => (template.direction ?? "incoming") === tab) ?? []} />
     </Panel>
-    <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Configure postback" : "Create postback"}>
+    <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Configurar postback" : "Criar postback"}>
       <form className="space-y-4" onSubmit={form.handleSubmit(data => {
         const macroName = z.string().trim().regex(/^[a-z][a-z0-9_]*$/i);
         const optionalMacro = z.union([macroName, z.string().trim().length(0)]);
         const schema = z.object({ name: z.string().trim().min(1), secret: z.string().trim().min(1), click_macro: macroName, transaction_macro: optionalMacro, payout_macro: macroName, status_macro: optionalMacro, currency: z.string().trim().regex(/^[a-z]{3}$/i) });
-        if (data.direction === "incoming" && (!schema.safeParse(data).success || (!data.network_id && !data.network_name.trim()))) { setFormError("Enter a name, affiliate network, secret, three-letter currency code and valid macro names without braces."); return; }
-        if (data.direction === "outgoing" && (!data.name.trim() || !data.url.trim())) { setFormError("Enter a name and Postback URL."); return; }
+        if (data.direction === "incoming" && (!schema.safeParse(data).success || (!data.network_id && !data.network_name.trim()))) { setFormError("Informe nome, rede de afiliados, segredo, código da moeda com três letras e macros válidas sem chaves."); return; }
+        if (data.direction === "outgoing" && (!data.name.trim() || !data.url.trim())) { setFormError("Informe um nome e a URL de postback."); return; }
         setFormError("");
         save.mutate(data);
       })}>
-        <TextField label="Name" register={form.register("name")} />
+        <TextField label="Nome" register={form.register("name")} />
         {values.direction === "incoming" ? <>
-          <p className="text-sm text-zinc-600">Choose an affiliate network and enter the macro names it uses to report conversions. Copy the generated URL into that network's postback settings.</p>
-          <label className="block text-sm font-medium">Affiliate network<select className="input mt-1 w-full" {...form.register("network_id")}><option value="">Create a new affiliate network</option>{networks.data?.items.map(network => <option key={network.id} value={network.id}>{network.name}</option>)}</select></label>
-          {!values.network_id ? <TextField label="New affiliate network name" register={form.register("network_name")} /> : null}
-          <TextField label="Postback secret" register={form.register("secret")} />
-          <button type="button" className="button-secondary" onClick={() => form.setValue("secret", generatePostbackSecret(), { shouldDirty: true })}>Generate secret</button>
-          <table className="w-full text-sm"><thead><tr><th className="text-left">Parameter</th><th className="text-left">Affiliate network macro (without braces)</th></tr></thead><tbody>
-            <tr><td>Click ID</td><td><input className="input w-full" aria-label="Click ID macro" {...form.register("click_macro")} /></td></tr>
-            <tr><td>Transaction ID</td><td><input className="input w-full" aria-label="Transaction ID macro" {...form.register("transaction_macro")} /></td></tr>
-            <tr><td>Payout</td><td><input className="input w-full" aria-label="Payout macro" {...form.register("payout_macro")} /></td></tr>
-            <tr><td>Status (optional)</td><td><input className="input w-full" aria-label="Status macro" placeholder="Blank = approved" {...form.register("status_macro")} /></td></tr>
+          <p className="text-sm text-zinc-600">Escolha uma rede de afiliados e informe as macros usadas para reportar conversões. Copie a URL gerada para as configurações de postback dessa rede.</p>
+          <label className="block text-sm font-medium">Rede de afiliados<select className="input mt-1 w-full" {...form.register("network_id")}><option value="">Criar uma rede de afiliados</option>{networks.data?.items.map(network => <option key={network.id} value={network.id}>{network.name}</option>)}</select></label>
+          {!values.network_id ? <TextField label="Nome da nova rede de afiliados" register={form.register("network_name")} /> : null}
+          <TextField label="Segredo do postback" register={form.register("secret")} />
+          <button type="button" className="button-secondary" onClick={() => form.setValue("secret", generatePostbackSecret(), { shouldDirty: true })}>Gerar segredo</button>
+          <table className="w-full text-sm"><thead><tr><th className="text-left">Parâmetro</th><th className="text-left">Macro da rede de afiliados (sem chaves)</th></tr></thead><tbody>
+            <tr><td>ID do clique</td><td><input className="input w-full" aria-label="Macro do ID do clique" {...form.register("click_macro")} /></td></tr>
+            <tr><td>ID da transação</td><td><input className="input w-full" aria-label="Macro do ID da transação" {...form.register("transaction_macro")} /></td></tr>
+            <tr><td>Valor da conversão</td><td><input className="input w-full" aria-label="Macro do valor da conversão" {...form.register("payout_macro")} /></td></tr>
+            <tr><td>Status (opcional)</td><td><input className="input w-full" aria-label="Macro do status" placeholder="Vazio = aprovado" {...form.register("status_macro")} /></td></tr>
           </tbody></table>
-          <TextField label="Payout currency" register={form.register("currency")} />
-          <p className="text-xs text-zinc-600">For a network macro such as &#123;cid&#125;, enter cid. Leave Transaction ID blank if the network has no separate transaction macro: one conversion will be counted per click. Repeated callbacks with the same transaction ID do not add revenue again. A blank Status uses approved.</p>
-          {preview ? <CopyablePostbackURL label="Postback URL · copy into your affiliate network's settings" value={preview} disabled={!editing || form.formState.isDirty} /> : <p className="text-sm text-zinc-600">Save the integration to generate its Postback URL.</p>}
-          {preview && (!editing || form.formState.isDirty) ? <p className="text-sm text-amber-700">Save the integration before copying this URL so the secret and affiliate network match the active settings.</p> : null}
-          {!base ? <p className="text-sm text-red-700">The public postback domain is unavailable. Check API configuration.</p> : null}
+          <TextField label="Moeda da conversão" register={form.register("currency")} />
+          <p className="text-xs text-zinc-600">Para uma macro como &#123;cid&#125;, informe cid. Deixe o ID da transação vazio se a rede não tiver uma macro própria: será contada uma conversão por clique. Retornos com o mesmo ID de transação não somam receita novamente. O status vazio usa approved (aprovado).</p>
+          {preview ? <CopyablePostbackURL label="URL de postback · copie para as configurações da rede de afiliados" value={preview} disabled={!editing || form.formState.isDirty} /> : <p className="text-sm text-zinc-600">Salve a integração para gerar a URL de postback.</p>}
+          {preview && (!editing || form.formState.isDirty) ? <p className="text-sm text-amber-700">Salve a integração antes de copiar esta URL para que o segredo e a rede correspondam à configuração ativa.</p> : null}
+          {!base ? <p className="text-sm text-red-700">O domínio público de postback está indisponível. Confira a configuração da API.</p> : null}
         </> : <>
-          <label className="block text-sm font-medium">Traffic source<select className="input mt-1 w-full" {...form.register("source_id")}><option value="">Global · all sources in this workspace</option>{sources.data?.items.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
-          <label className="block text-sm font-medium">Campaign<select className="input mt-1 w-full" {...form.register("campaign_id")}><option value="">All campaigns</option>{campaigns.data?.items.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</select></label>
-          <TextField label="Postback URL" register={form.register("url")} />
-          <p className="text-xs text-zinc-600">Example: https://source.example/postback?clickid=&#123;source_click_id&#125;&amp;revenue=&#123;payout&#125;&amp;event_id=&#123;conversion_id&#125;</p>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register("enabled")} />Enabled</label>
-          <table className="w-full text-sm"><thead><tr><th className="text-left">Macro</th><th className="text-left">Value</th></tr></thead><tbody>
-            <tr><td><code>&#123;source_click_id&#125;</code></td><td>The traffic source's original click ID. Use this when reporting back to that source.</td></tr>
-            <tr><td><code>&#123;click_id&#125; / &#123;cid&#125;</code></td><td>TraffoFlex click ID.</td></tr>
-            <tr><td><code>&#123;payout&#125; / &#123;sum&#125;</code></td><td>Conversion payout in its currency.</td></tr>
-            <tr><td><code>&#123;currency&#125;</code></td><td>Currency code.</td></tr>
-            <tr><td><code>&#123;conversion_id&#125;</code></td><td>Stable event ID for receiver deduplication.</td></tr>
-            <tr><td><code>&#123;transaction_id&#125;, &#123;status&#125;, &#123;event_type&#125;, &#123;network_id&#125;</code></td><td>Conversion details.</td></tr>
-            <tr><td><code>&#123;sub1&#125;…&#123;sub10&#125; / &#123;s1&#125;…&#123;s4&#125;</code></td><td>Saved click SubIDs.</td></tr>
+          <label className="block text-sm font-medium">Fonte de tráfego<select className="input mt-1 w-full" {...form.register("source_id")}><option value="">Global · todas as fontes desta área de trabalho</option>{sources.data?.items.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+          <label className="block text-sm font-medium">Campanha<select className="input mt-1 w-full" {...form.register("campaign_id")}><option value="">Todas as campanhas</option>{campaigns.data?.items.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</select></label>
+          <TextField label="URL de postback" register={form.register("url")} />
+          <p className="text-xs text-zinc-600">Exemplo: https://source.example/postback?clickid=&#123;source_click_id&#125;&amp;revenue=&#123;payout&#125;&amp;event_id=&#123;conversion_id&#125;</p>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register("enabled")} />Ativado</label>
+          <table className="w-full text-sm"><thead><tr><th className="text-left">Macro</th><th className="text-left">Valor</th></tr></thead><tbody>
+            <tr><td><code>&#123;source_click_id&#125;</code></td><td>ID original do clique na fonte de tráfego. Use ao enviar informações de volta para essa fonte.</td></tr>
+            <tr><td><code>&#123;click_id&#125; / &#123;cid&#125;</code></td><td>ID do clique no TraffoFlex.</td></tr>
+            <tr><td><code>&#123;payout&#125; / &#123;sum&#125;</code></td><td>Valor da conversão na moeda informada.</td></tr>
+            <tr><td><code>&#123;currency&#125;</code></td><td>Código da moeda.</td></tr>
+            <tr><td><code>&#123;conversion_id&#125;</code></td><td>ID fixo do evento para deduplicação no destinatário.</td></tr>
+            <tr><td><code>&#123;transaction_id&#125;, &#123;status&#125;, &#123;event_type&#125;, &#123;network_id&#125;</code></td><td>Detalhes da conversão.</td></tr>
+            <tr><td><code>&#123;sub1&#125;…&#123;sub10&#125; / &#123;s1&#125;…&#123;s4&#125;</code></td><td>SubIDs salvos do clique.</td></tr>
           </tbody></table>
-          <p className="text-sm text-zinc-600">Macro names are case insensitive. Pass the source's click token as source_click_id in your campaign tracking URL. New approved conversions are sent with up to five attempts; old conversions are not replayed. Receivers should deduplicate by conversion_id or Idempotency-Key.</p>
+          <p className="text-sm text-zinc-600">As macros não diferenciam maiúsculas de minúsculas. Envie o identificador do clique da fonte em source_click_id na URL de rastreamento. Novas conversões aprovadas são enviadas em até cinco tentativas; conversões antigas não são reenviadas. O destinatário deve deduplicar por conversion_id ou Idempotency-Key.</p>
         </>}
-        {formError || save.error ? <p role="alert" className="text-sm text-red-700">{formError || (save.error instanceof Error ? save.error.message : "Save failed")}</p> : null}
-        <button className="button-primary" type="submit" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save postback"}</button>
+        {formError || save.error ? <p role="alert" className="text-sm text-red-700">{formError || (save.error instanceof Error ? save.error.message : "Falha ao salvar")}</p> : null}
+        <button className="button-primary" type="submit" disabled={save.isPending}>{save.isPending ? "Salvando…" : "Salvar postback"}</button>
       </form>
     </Modal>
-    {tab === "incoming" ? <Panel title="Incoming postback log" className="mt-4">
+    {tab === "incoming" ? <Panel title="Registro de postbacks recebidos" className="mt-4">
       <div className="mb-3 flex flex-wrap items-end gap-3">
-        <label className="min-w-64 flex-1 text-sm font-medium">Search by ID<input className="input mt-1 w-full" type="search" placeholder="Postback, click or transaction ID" value={logSearch} onChange={event => setLogSearch(event.target.value)} /></label>
-        <label className="text-sm font-medium">From (UTC)<input className="input mt-1 block" type="date" value={logFilters.from} onChange={event => setLogFilters(current => ({ ...current, from: event.target.value, offset: 0 }))} /></label>
-        <label className="text-sm font-medium">To (UTC)<input className="input mt-1 block" type="date" value={logFilters.to} onChange={event => setLogFilters(current => ({ ...current, to: event.target.value, offset: 0 }))} /></label>
+        <label className="min-w-64 flex-1 text-sm font-medium">Buscar por ID<input className="input mt-1 w-full" type="search" placeholder="ID do postback, clique ou transação" value={logSearch} onChange={event => setLogSearch(event.target.value)} /></label>
+        <label className="text-sm font-medium">De (UTC)<input className="input mt-1 block" type="date" value={logFilters.from} onChange={event => setLogFilters(current => ({ ...current, from: event.target.value, offset: 0 }))} /></label>
+        <label className="text-sm font-medium">Até (UTC)<input className="input mt-1 block" type="date" value={logFilters.to} onChange={event => setLogFilters(current => ({ ...current, to: event.target.value, offset: 0 }))} /></label>
       </div>
-      {!validLogRange ? <p className="mb-3 text-sm text-red-700" role="alert">The start date must not be after the end date.</p> : null}
+      {!validLogRange ? <p className="mb-3 text-sm text-red-700" role="alert">A data inicial não pode ser posterior à data final.</p> : null}
       <DataTable columns={logColumns} data={logs.data?.items ?? []} />
       <div className="mt-3 flex items-center justify-between gap-3 text-sm text-zinc-600">
-        <span>{logs.isFetching ? "Loading…" : `${logs.data?.total ?? 0} postbacks`}</span>
+        <span>{logs.isFetching ? "Carregando…" : `${logs.data?.total ?? 0} postbacks`}</span>
         <div className="flex gap-2">
-          <button type="button" className="button-secondary" disabled={logs.isFetching || !validLogRange || logFilters.offset === 0} onClick={() => setLogFilters(current => ({ ...current, offset: Math.max(0, current.offset - current.limit) }))}>Previous</button>
-          <button type="button" className="button-secondary" disabled={logs.isFetching || !validLogRange || logFilters.offset + logFilters.limit >= (logs.data?.total ?? 0)} onClick={() => setLogFilters(current => ({ ...current, offset: current.offset + current.limit }))}>Next</button>
+          <button type="button" className="button-secondary" disabled={logs.isFetching || !validLogRange || logFilters.offset === 0} onClick={() => setLogFilters(current => ({ ...current, offset: Math.max(0, current.offset - current.limit) }))}>Anterior</button>
+          <button type="button" className="button-secondary" disabled={logs.isFetching || !validLogRange || logFilters.offset + logFilters.limit >= (logs.data?.total ?? 0)} onClick={() => setLogFilters(current => ({ ...current, offset: current.offset + current.limit }))}>Próximo</button>
         </div>
       </div>
-    </Panel> : <Panel title="Outgoing delivery log · latest 100" className="mt-4">
-      <p className="mb-3 text-sm text-zinc-600">Pending → sending → delivered. Failed means the receiver did not accept the request after retries, or required click data is missing.</p>
+    </Panel> : <Panel title="Registro de envios · últimos 100" className="mt-4">
+      <p className="mb-3 text-sm text-zinc-600">Pendente → enviando → entregue. Falha indica que o destinatário não aceitou a solicitação após as tentativas ou faltam dados obrigatórios do clique.</p>
       <DataTable columns={deliveryColumns} data={deliveries.data?.items ?? []} />
     </Panel>}
   </Page>;
@@ -2405,14 +2446,14 @@ function HealthHistoryPage() {
   const columns = useMemo<ColumnDef<HealthHistoryRow>[]>(
     () => [
       {
-        header: "Checked",
-        cell: ({ row }) => new Date(row.original.checked_at).toLocaleString()
+        header: "Verificado em",
+        cell: ({ row }) => new Date(row.original.checked_at).toLocaleString("pt-BR")
       },
-      { header: "Destination", cell: ({ row }) => <span title={row.original.destination_id}>{destinations.data?.items.find(destination => destination.id === row.original.destination_id)?.name ?? row.original.destination_id}</span> },
-      { header: "Previous", accessorKey: "previous" },
-      { header: "Current", accessorKey: "current" },
+      { header: "Destino", cell: ({ row }) => <span title={row.original.destination_id}>{destinations.data?.items.find(destination => destination.id === row.original.destination_id)?.name ?? row.original.destination_id}</span> },
+      { header: "Anterior", cell: ({ row }) => uiValue(row.original.previous) },
+      { header: "Atual", cell: ({ row }) => uiValue(row.original.current) },
       {
-        header: "Error",
+        header: "Erro",
         cell: ({ row }) => (
           <span className="break-words text-red-700">{row.original.error ?? ""}</span>
         )
@@ -2422,22 +2463,22 @@ function HealthHistoryPage() {
   );
 
   return (
-    <Page title="Health History">
-      <Panel title="Destination health transitions">
+    <Page title="Histórico de disponibilidade">
+      <Panel title="Alterações de disponibilidade dos destinos">
         <div className="mb-4 grid grid-cols-3 gap-3">
-          <label className="grid gap-1 text-sm">Destination
+          <label className="grid gap-1 text-sm">Destino
             <select className="input" value={filters.destination_id} onChange={event => setFilters(current => ({ ...current, destination_id: event.target.value }))}>
-              <option value="">All destinations</option>
+              <option value="">Todos os destinos</option>
               {destinations.data?.items.map(destination => <option key={destination.id} value={destination.id}>{destination.name}</option>)}
             </select>
           </label>
           <FilterInput
-            label="Current"
+            label="Atual"
             onChange={(value) => setFilters((current) => ({ ...current, current: value }))}
             value={filters.current}
           />
           <FilterInput
-            label="Limit"
+            label="Limite"
             onChange={(value) =>
               setFilters((current) => ({
                 ...current,
@@ -2517,7 +2558,7 @@ function ReportsPage() {
     campaign_id: campaigns.data?.items ?? [], stream_id: streams.data ?? [], destination_id: destinations.data?.items ?? [], source_id: sources.data?.items ?? []
   };
   function displayValue(field: string, value: string) {
-    return value === "" ? "Unknown" : catalogs[field]?.find(item => item.id === value)?.name || value;
+    return value === "" ? "Desconhecido" : catalogs[field]?.find(item => item.id === value)?.name || value;
   }
   const report = useQuery({
     queryKey: ["report-explorer", eventMode || currentGroup.key, tableFilters],
@@ -2540,7 +2581,7 @@ function ReportsPage() {
   }, [urlState]);
   function applyFilters(values: Record<string, string>) {
     const validation = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).refine(value => value.from <= value.to).safeParse(values);
-    if (!validation.success) { filterForm.setError("to", { message: "Choose a valid period; From must be before To." }); return; }
+    if (!validation.success) { filterForm.setError("to", { message: "Escolha um período válido; a data inicial deve ser anterior ou igual à final." }); return; }
     if (values.stream_id && values.campaign_id && !streams.data?.some(stream => stream.id === values.stream_id && stream.campaign_id === values.campaign_id)) values.stream_id = "";
     const updates: Record<string, string | null> = { from: values.from, to: values.to, timezone: values.timezone, profit: values.profit || null, min_clicks: values.min_clicks || null };
     reportGroups.forEach(group => { updates[group.field] = values[group.field]?.trim() || null; });
@@ -2567,74 +2608,74 @@ function ReportsPage() {
     if (mode) reportGroups.filter(group => !(mode === "health" ? ["destination_id"] : ["campaign_id", "stream_id", "destination_id"]).includes(group.field)).forEach(group => { updates[group.field] = null; });
     updateURL(updates, true);
   }
-  const money = (value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+  const money = (value: number) => `$${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
   const ratio = (top: number, bottom: number, multiplier = 1) => bottom ? top / bottom * multiplier : 0;
-  const heading = (label: string, key: string) => () => <button type="button" className="whitespace-nowrap hover:text-zinc-950" aria-label={`Sort by ${label}`} onClick={() => updateURL({ sort: key, order: sort === key && order === "desc" ? "asc" : "desc" })}>{label} {sort === key ? (order === "desc" ? "↓" : "↑") : ""}</button>;
+  const heading = (label: string, key: string) => () => <button type="button" className="whitespace-nowrap hover:text-zinc-950" aria-label={`Ordenar por ${label}`} onClick={() => updateURL({ sort: key, order: sort === key && order === "desc" ? "asc" : "desc" })}>{label} {sort === key ? (order === "desc" ? "↓" : "↑") : ""}</button>;
   const columns: ColumnDef<ReportRow>[] = eventMode ? [
-    { header: eventMode === "health" ? "Status" : "Reason", accessorKey: "name" },
-    { header: "Events", cell: ({ row }) => formatInteger(row.original.metrics.events ?? 0) }
+    { header: eventMode === "health" ? "Status" : "Motivo", accessorKey: "name" },
+    { header: "Eventos", cell: ({ row }) => formatInteger(row.original.metrics.events ?? 0) }
   ] : [
-    { id: "name", header: heading(currentGroup.label, "name"), cell: ({ row }) => <button type="button" className="text-left font-medium text-indigo-700 hover:underline" title={`Filter ${currentGroup.label}: ${row.original.name}${level < path.length - 1 ? ` → ${reportGroups.find(group => group.key === path[level + 1])?.label}` : ""}`} onClick={() => drill(row.original)}>{row.original.name} <span aria-hidden="true">›</span></button> },
-    { id: "clicks", header: heading("Clicks", "clicks"), cell: ({ row }) => formatInteger(row.original.metrics.clicks) },
-    { id: "conversions", header: heading("Conversions", "conversions"), cell: ({ row }) => formatInteger(row.original.metrics.conversions) },
+    { id: "name", header: heading(currentGroup.label, "name"), cell: ({ row }) => <button type="button" className="text-left font-medium text-indigo-700 hover:underline" title={`Filtrar ${currentGroup.label}: ${row.original.name}${level < path.length - 1 ? ` → ${reportGroups.find(group => group.key === path[level + 1])?.label}` : ""}`} onClick={() => drill(row.original)}>{row.original.name} <span aria-hidden="true">›</span></button> },
+    { id: "clicks", header: heading("Cliques", "clicks"), cell: ({ row }) => formatInteger(row.original.metrics.clicks) },
+    { id: "conversions", header: heading("Conversões", "conversions"), cell: ({ row }) => formatInteger(row.original.metrics.conversions) },
     { id: "cr", header: heading("CR", "cr"), cell: ({ row }) => `${formatFixed(ratio(row.original.metrics.conversions, row.original.metrics.clicks, 100))}%` },
-    { id: "revenue", header: heading("Revenue", "revenue"), cell: ({ row }) => money(row.original.metrics.revenue) },
-    { id: "cost", header: heading("Cost", "cost"), cell: ({ row }) => money(row.original.metrics.cost) },
-    { id: "profit", header: heading("Profit", "profit"), cell: ({ row }) => <span className={row.original.metrics.profit >= 0 ? "text-emerald-700" : "text-red-700"}>{money(row.original.metrics.profit)}</span> },
+    { id: "revenue", header: heading("Receita", "revenue"), cell: ({ row }) => money(row.original.metrics.revenue) },
+    { id: "cost", header: heading("Custo", "cost"), cell: ({ row }) => money(row.original.metrics.cost) },
+    { id: "profit", header: heading("Lucro", "profit"), cell: ({ row }) => <span className={row.original.metrics.profit >= 0 ? "text-emerald-700" : "text-red-700"}>{money(row.original.metrics.profit)}</span> },
     { id: "roi", header: heading("ROI", "roi"), cell: ({ row }) => <span className={row.original.metrics.roi >= 0 ? "text-emerald-700" : "text-red-700"}>{formatFixed(row.original.metrics.roi)}%</span> },
     { id: "cpc", header: heading("CPC", "cpc"), cell: ({ row }) => row.original.metrics.clicks ? money(ratio(row.original.metrics.cost, row.original.metrics.clicks)) : "—" },
     { id: "epc", header: heading("EPC", "epc"), cell: ({ row }) => row.original.metrics.clicks ? money(ratio(row.original.metrics.revenue, row.original.metrics.clicks)) : "—" },
     { id: "cpa", header: heading("CPA", "cpa"), cell: ({ row }) => row.original.metrics.conversions ? money(ratio(row.original.metrics.cost, row.original.metrics.conversions)) : "—" }
   ];
   const error = report.error || overview.error || daily.error || campaigns.error || streams.error || destinations.error || sources.error;
-  return <Page title="Reports">
-    <Panel title="Filters">
+  return <Page title="Relatórios">
+    <Panel title="Filtros">
       <form onSubmit={filterForm.handleSubmit(applyFilters)} className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium">From<input className="input mt-1" type="date" {...filterForm.register("from")} /></label>
-          <label className="text-sm font-medium">To<input className="input mt-1" type="date" {...filterForm.register("to")} /></label>
-          <label className="text-sm font-medium">Timezone<select className="input mt-1" {...filterForm.register("timezone")}>{reportTimezones.map(zone => <option key={zone}>{zone}</option>)}</select></label>
-          {[["today", "Today"], ["yesterday", "Yesterday"], ["7days", "Last 7 days"], ["30days", "Last 30 days"]].map(([key, label]) => <button key={key} type="button" className="button-secondary" onClick={() => { const range = reportPreset(key, filterForm.getValues("timezone")); filterForm.setValue("from", range.from); filterForm.setValue("to", range.to); void filterForm.handleSubmit(applyFilters)(); }}>{label}</button>)}
+          <label className="text-sm font-medium">De<input className="input mt-1" type="date" {...filterForm.register("from")} /></label>
+          <label className="text-sm font-medium">Até<input className="input mt-1" type="date" {...filterForm.register("to")} /></label>
+          <label className="text-sm font-medium">Fuso horário<select className="input mt-1" {...filterForm.register("timezone")}>{reportTimezones.map(zone => <option key={zone}>{zone}</option>)}</select></label>
+          {[["today", "Hoje"], ["yesterday", "Ontem"], ["7days", "Últimos 7 dias"], ["30days", "Últimos 30 dias"]].map(([key, label]) => <button key={key} type="button" className="button-secondary" onClick={() => { const range = reportPreset(key, filterForm.getValues("timezone")); filterForm.setValue("from", range.from); filterForm.setValue("to", range.to); void filterForm.handleSubmit(applyFilters)(); }}>{label}</button>)}
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {reportGroups.filter(group => group.field in catalogs && (!eventMode || (eventMode === "health" ? group.field === "destination_id" : group.field !== "source_id"))).map(group => <label key={group.field} className="text-sm font-medium">{group.label}<select className="input mt-1" {...filterForm.register(group.field)}><option value="">All</option>{selectedFilters[group.field] && !catalogs[group.field].some(item => item.id === selectedFilters[group.field]) ? <option value={selectedFilters[group.field]}>{selectedFilters[group.field]}</option> : null}{catalogs[group.field].filter(item => group.field !== "stream_id" || !filterForm.watch("campaign_id") || (item as Stream).campaign_id === filterForm.watch("campaign_id")).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>)}
+          {reportGroups.filter(group => group.field in catalogs && (!eventMode || (eventMode === "health" ? group.field === "destination_id" : group.field !== "source_id"))).map(group => <label key={group.field} className="text-sm font-medium">{group.label}<select className="input mt-1" {...filterForm.register(group.field)}><option value="">Todos</option>{selectedFilters[group.field] && !catalogs[group.field].some(item => item.id === selectedFilters[group.field]) ? <option value={selectedFilters[group.field]}>{selectedFilters[group.field]}</option> : null}{catalogs[group.field].filter(item => group.field !== "stream_id" || !filterForm.watch("campaign_id") || (item as Stream).campaign_id === filterForm.watch("campaign_id")).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>)}
         </div>
-        {!eventMode ? <details className="rounded-md border border-zinc-200 p-3"><summary className="cursor-pointer text-sm font-medium">GEO, devices & placements</summary><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{reportGroups.filter(group => !(group.field in catalogs)).map(group => <label key={group.field} className="text-sm font-medium">{group.label}<input className="input mt-1" placeholder={`Any ${group.label.toLowerCase()}`} {...filterForm.register(group.field)} /></label>)}</div></details> : null}
-        <div className="flex items-center gap-3"><button className="button-primary" type="submit">Apply filters</button><button className="button-secondary" type="button" onClick={() => { setSearchParams({ groups: path.join(",") }); setSearch(""); }}>Reset filters</button><span role="alert" className="text-sm text-red-700">{filterForm.formState.errors.to?.message || (!validPeriod ? "Invalid period" : "")}</span></div>
+        {!eventMode ? <details className="rounded-md border border-zinc-200 p-3"><summary className="cursor-pointer text-sm font-medium">Localização, dispositivos e posicionamentos</summary><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{reportGroups.filter(group => !(group.field in catalogs)).map(group => <label key={group.field} className="text-sm font-medium">{group.label}<input className="input mt-1" placeholder={`Qualquer ${group.label.toLowerCase()}`} {...filterForm.register(group.field)} /></label>)}</div></details> : null}
+        <div className="flex items-center gap-3"><button className="button-primary" type="submit">Aplicar filtros</button><button className="button-secondary" type="button" onClick={() => { setSearchParams({ groups: path.join(",") }); setSearch(""); }}>Limpar filtros</button><span role="alert" className="text-sm text-red-700">{filterForm.formState.errors.to?.message || (!validPeriod ? "Período inválido" : "")}</span></div>
       </form>
     </Panel>
-    <div className="my-4 flex flex-wrap gap-2" aria-label="Active filters">
+    <div className="my-4 flex flex-wrap gap-2" aria-label="Filtros ativos">
       {Object.entries(selectedFilters).map(([field, value]) => <button type="button" key={field} className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-sm" onClick={() => updateURL({ [field]: null })}>{reportGroups.find(group => group.field === field)?.label}: {displayValue(field, value)} ×</button>)}
     </div>
-    {error ? <p role="alert" className="mb-4 text-sm text-red-700">{error instanceof Error ? error.message : "Failed to load report"}</p> : null}
-    {eventMode ? <p className="my-4 text-lg font-medium">{formatInteger(report.data?.summary.events ?? 0)} events</p> : <MetricGrid metrics={overview.data} />}
-    <Panel title="Grouping & drill-down" className="mt-6">
+    {error ? <p role="alert" className="mb-4 text-sm text-red-700">{error instanceof Error ? error.message : "Não foi possível carregar o relatório"}</p> : null}
+    {eventMode ? <p className="my-4 text-lg font-medium">{formatInteger(report.data?.summary.events ?? 0)} eventos</p> : <MetricGrid metrics={overview.data} />}
+    <Panel title="Agrupamento e detalhamento" className="mt-6">
       <div className="flex flex-wrap items-end gap-3">
-        {[0, 1, 2].map(index => <label key={index} className="text-sm font-medium">{index === 0 ? "Group by" : "Then by"}<select className="input mt-1" disabled={Boolean(eventMode) || index > path.length} aria-label={index === 0 ? "Group by" : `Then by ${index}`} value={path[index] || ""} onChange={event => selectPath(index, event.target.value)}>{index > 0 ? <option value="">None</option> : null}{reportGroups.map(group => <option key={group.key} value={group.key}>{group.label}</option>)}</select></label>)}
-        <label className="ml-auto text-sm font-medium">Report type<select className="input mt-1" value={eventMode} onChange={event => setEvent(event.target.value)}><option value="">Traffic & conversions</option><option value="trafficback">Trafficback events</option><option value="health">Health events</option></select></label>
+        {[0, 1, 2].map(index => <label key={index} className="text-sm font-medium">{index === 0 ? "Agrupar por" : "Depois por"}<select className="input mt-1" disabled={Boolean(eventMode) || index > path.length} aria-label={index === 0 ? "Agrupar por" : `Depois por ${index}`} value={path[index] || ""} onChange={event => selectPath(index, event.target.value)}>{index > 0 ? <option value="">Nenhum</option> : null}{reportGroups.map(group => <option key={group.key} value={group.key}>{group.label}</option>)}</select></label>)}
+        <label className="ml-auto text-sm font-medium">Tipo de relatório<select className="input mt-1" value={eventMode} onChange={event => setEvent(event.target.value)}><option value="">Tráfego e conversões</option><option value="trafficback">Eventos de retorno de tráfego</option><option value="health">Eventos de disponibilidade</option></select></label>
       </div>
       {!eventMode ? <>
-        <nav aria-label="Drill-down path" className="mt-4 flex flex-wrap items-center gap-2 text-sm"><button type="button" className="text-indigo-700 hover:underline" onClick={() => updateURL({}, true)}>All groups</button>{trail.map((item, index) => <React.Fragment key={item.field}><span>›</span><button type="button" className="rounded-md bg-indigo-50 px-2 py-1 text-indigo-800" onClick={() => { const updates: Record<string, null> = {}; trail.slice(index + 1).forEach(later => { updates[`drill_${later.field}`] = null; }); updateURL(updates); }}>{item.label}: {displayValue(item.field, item.value)}</button><button type="button" aria-label={`Remove ${item.label} drill-down`} className="text-zinc-500" onClick={() => { const updates: Record<string, null> = {}; trail.slice(index).forEach(later => { updates[`drill_${later.field}`] = null; }); updateURL(updates); }}>×</button></React.Fragment>)}</nav>
-        <p className="mt-2 text-sm text-zinc-600">Click a row to filter this segment{level < path.length - 1 ? ` and group by ${reportGroups.find(group => group.key === path[level + 1])?.label.toLowerCase()}` : ""}.</p>
+        <nav aria-label="Caminho do detalhamento" className="mt-4 flex flex-wrap items-center gap-2 text-sm"><button type="button" className="text-indigo-700 hover:underline" onClick={() => updateURL({}, true)}>Todos os grupos</button>{trail.map((item, index) => <React.Fragment key={item.field}><span>›</span><button type="button" className="rounded-md bg-indigo-50 px-2 py-1 text-indigo-800" onClick={() => { const updates: Record<string, null> = {}; trail.slice(index + 1).forEach(later => { updates[`drill_${later.field}`] = null; }); updateURL(updates); }}>{item.label}: {displayValue(item.field, item.value)}</button><button type="button" aria-label={`Remover detalhamento de ${item.label}`} className="text-zinc-500" onClick={() => { const updates: Record<string, null> = {}; trail.slice(index).forEach(later => { updates[`drill_${later.field}`] = null; }); updateURL(updates); }}>×</button></React.Fragment>)}</nav>
+        <p className="mt-2 text-sm text-zinc-600">Clique em uma linha para filtrar este segmento{level < path.length - 1 ? ` e agrupar por ${reportGroups.find(group => group.key === path[level + 1])?.label.toLowerCase()}` : ""}.</p>
       </> : null}
     </Panel>
-    <Panel title={eventMode ? "Events" : `By ${currentGroup.label.toLowerCase()}`} className="mt-6">
+    <Panel title={eventMode ? "Eventos" : `Por ${currentGroup.label.toLowerCase()}`} className="mt-6">
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium">Search this page<input type="search" className="input mt-1" value={search} onChange={event => setSearch(event.target.value)} /></label>
-        {!eventMode ? <><label className="text-sm font-medium">Rows<select className="input mt-1" value={searchParams.get("profit") || ""} onChange={event => updateURL({ profit: event.target.value || null })}><option value="">All results</option><option value="positive">Profitable</option><option value="negative">Unprofitable</option></select></label><label className="text-sm font-medium">Minimum clicks<input type="number" min="0" step="1" className="input mt-1 w-36" value={searchParams.get("min_clicks") || ""} onChange={event => updateURL({ min_clicks: event.target.value || null })} /></label></> : null}
-        <button type="button" className="button-secondary ml-auto" disabled={report.isFetching || !validPeriod} onClick={() => { void report.refetch(); if (!eventMode) { void overview.refetch(); void daily.refetch(); } }}>Refresh</button>
+        <label className="text-sm font-medium">Buscar nesta página<input type="search" className="input mt-1" value={search} onChange={event => setSearch(event.target.value)} /></label>
+        {!eventMode ? <><label className="text-sm font-medium">Linhas<select className="input mt-1" value={searchParams.get("profit") || ""} onChange={event => updateURL({ profit: event.target.value || null })}><option value="">Todos os resultados</option><option value="positive">Com lucro</option><option value="negative">Com prejuízo</option></select></label><label className="text-sm font-medium">Mínimo de cliques<input type="number" min="0" step="1" className="input mt-1 w-36" value={searchParams.get("min_clicks") || ""} onChange={event => updateURL({ min_clicks: event.target.value || null })} /></label></> : null}
+        <button type="button" className="button-secondary ml-auto" disabled={report.isFetching || !validPeriod} onClick={() => { void report.refetch(); if (!eventMode) { void overview.refetch(); void daily.refetch(); } }}>Atualizar</button>
       </div>
-      {report.isFetching ? <p role="status" className="mb-3 text-sm text-zinc-500">Loading report…</p> : null}
+      {report.isFetching ? <p role="status" className="mb-3 text-sm text-zinc-500">Carregando relatório…</p> : null}
       <div className="overflow-x-auto"><DataTable columns={columns} data={rows} /></div>
-      {!report.isPending && rows.length === 0 ? <p className="py-8 text-center text-sm text-zinc-500">No results for these filters.</p> : null}
+      {!report.isPending && rows.length === 0 ? <p className="py-8 text-center text-sm text-zinc-500">Nenhum resultado para estes filtros.</p> : null}
       {!eventMode ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <span>{total ? `${offset + 1}–${Math.min(offset + limit, total)} of ${total}` : "0 results"} · Matching rows: revenue {money(report.data?.summary.revenue ?? 0)}, cost {money(report.data?.summary.cost ?? 0)}, profit {money(report.data?.summary.profit ?? 0)}</span>
-        <div className="flex items-center gap-2"><label>Per page <select className="rounded border border-zinc-300 p-1" aria-label="Rows per page" value={limit} onChange={event => updateURL({ limit: event.target.value })}>{[25, 50, 100, 250, 500].map(size => <option key={size}>{size}</option>)}</select></label><button className="button-secondary" type="button" disabled={offset === 0 || report.isFetching} onClick={() => updateURL({ offset: String(Math.max(0, offset - limit)) })}>Previous</button><button className="button-secondary" type="button" disabled={offset + limit >= total || report.isFetching} onClick={() => updateURL({ offset: String(offset + limit) })}>Next</button></div>
+        <span>{total ? `${offset + 1}–${Math.min(offset + limit, total)} de ${total}` : "0 resultados"}  · Linhas correspondentes: receita {money(report.data?.summary.revenue ?? 0)}, custo {money(report.data?.summary.cost ?? 0)}, lucro {money(report.data?.summary.profit ?? 0)}</span>
+        <div className="flex items-center gap-2"><label>Por página <select className="rounded border border-zinc-300 p-1" aria-label="Linhas por página" value={limit} onChange={event => updateURL({ limit: event.target.value })}>{[25, 50, 100, 250, 500].map(size => <option key={size}>{size}</option>)}</select></label><button className="button-secondary" type="button" disabled={offset === 0 || report.isFetching} onClick={() => updateURL({ offset: String(Math.max(0, offset - limit)) })}>Anterior</button><button className="button-secondary" type="button" disabled={offset + limit >= total || report.isFetching} onClick={() => updateURL({ offset: String(offset + limit) })}>Próximo</button></div>
       </div> : null}
     </Panel>
-    {!eventMode ? <Panel title="Daily trend for this segment" className="mt-6">
-      <div className="mb-4 flex gap-2">{(["money", "volume", "efficiency"] as const).map(mode => <button className={chartMode === mode ? "button-primary" : "button-secondary"} type="button" key={mode} onClick={() => setChartMode(mode)}>{mode}</button>)}</div>
-      <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={daily.data?.rows ?? []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip />{chartMode === "money" ? <><Bar dataKey="metrics.revenue" fill="#0f766e" name="Revenue" /><Bar dataKey="metrics.cost" fill="#f97316" name="Cost" /><Bar dataKey="metrics.profit" fill="#16a34a" name="Profit" /></> : chartMode === "volume" ? <><Bar dataKey="metrics.clicks" fill="#2563eb" name="Clicks" /><Bar dataKey="metrics.conversions" fill="#16a34a" name="Conversions" /></> : <Bar dataKey="metrics.roi" fill="#7c3aed" name="ROI" />}</BarChart></ResponsiveContainer></div>
+    {!eventMode ? <Panel title="Evolução diária deste segmento" className="mt-6">
+      <div className="mb-4 flex gap-2">{(["money", "volume", "efficiency"] as const).map(mode => <button className={chartMode === mode ? "button-primary" : "button-secondary"} type="button" key={mode} onClick={() => setChartMode(mode)}>{uiValue(mode)}</button>)}</div>
+      <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={daily.data?.rows ?? []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip />{chartMode === "money" ? <><Bar dataKey="metrics.revenue" fill="#0f766e" name="Receita" /><Bar dataKey="metrics.cost" fill="#f97316" name="Custo" /><Bar dataKey="metrics.profit" fill="#16a34a" name="Lucro" /></> : chartMode === "volume" ? <><Bar dataKey="metrics.clicks" fill="#2563eb" name="Cliques" /><Bar dataKey="metrics.conversions" fill="#16a34a" name="Conversões" /></> : <Bar dataKey="metrics.roi" fill="#7c3aed" name="ROI" />}</BarChart></ResponsiveContainer></div>
     </Panel> : null}
   </Page>;
 }
@@ -2647,18 +2688,18 @@ function IngestionPage() {
   const columns = useMemo<ColumnDef<IngestionErrorRow>[]>(
     () => [
       {
-        header: "Observed",
-        cell: ({ row }) => new Date(row.original.observed_at).toLocaleString()
+        header: "Registrado em",
+        cell: ({ row }) => new Date(row.original.observed_at).toLocaleString("pt-BR")
       },
-      { header: "Topic", accessorKey: "topic" },
+      { header: "Tópico", accessorKey: "topic" },
       {
-        header: "Error",
+        header: "Erro",
         cell: ({ row }) => (
           <span className="break-words text-red-700">{row.original.error}</span>
         )
       },
       {
-        header: "Raw message",
+        header: "Mensagem bruta",
         cell: ({ row }) => (
           <code className="block max-w-xl break-words text-xs text-zinc-600">
             {row.original.raw_message}
@@ -2670,8 +2711,8 @@ function IngestionPage() {
   );
 
   return (
-    <Page title="Ingestion">
-      <Panel title="Kafka ingestion errors">
+    <Page title="Entrada de dados">
+      <Panel title="Erros na entrada de dados do Kafka">
         <DataTable columns={columns} data={errors.data?.rows ?? []} />
       </Panel>
     </Page>
@@ -2681,27 +2722,27 @@ function IngestionPage() {
 function MetricGrid({ metrics }: { metrics?: Metrics }) {
   const items: Array<[string, MetricKey, number]> = [
     [
-      "Clicks",
+      "Cliques",
       "clicks",
       metrics?.clicks ?? 0
     ],
     [
-      "Conversions",
+      "Conversões",
       "conversions",
       metrics?.conversions ?? 0
     ],
     [
-      "Revenue",
+      "Receita",
       "revenue",
       metrics?.revenue ?? 0
     ],
     [
-      "Cost",
+      "Custo",
       "cost",
       metrics?.cost ?? 0
     ],
     [
-      "Profit",
+      "Lucro",
       "profit",
       metrics?.profit ?? 0
     ],
@@ -2917,7 +2958,7 @@ function Modal({
           <h2 className="text-base font-semibold text-zinc-950">{title}</h2>
           <ActionIconButton
             icon="close"
-            label="Close"
+            label="Fechar"
             onClick={onClose}
             tooltipBelow
           />
@@ -2966,7 +3007,7 @@ function SelectField({
       <select className="input mt-1" {...register}>
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {uiValue(option)}
           </option>
         ))}
       </select>
@@ -3209,14 +3250,14 @@ const campaignSchema = z.object({
     max_depth: z.number()
   }).refine(
     (config) => !config.enabled || /^https?:\/\/[^\s/?#@]+(?:[/?#]|$)/i.test(config.url.trim()),
-    "Trafficback URL must be an absolute HTTP or HTTPS URL"
+    "A URL de retorno deve ser um endereço completo HTTP ou HTTPS"
   ).refine(
     (config) => !config.enabled || (Number.isInteger(config.max_depth) && config.max_depth >= 1 && config.max_depth <= 10),
-    "Maximum trafficback depth must be between 1 and 10"
+    "O máximo de retornos de tráfego deve estar entre 1 e 10"
   )
 }).refine(
   (campaign) => campaign.status !== "active" || campaign.trafficback_config.enabled,
-  "Active campaign requires a trafficback URL"
+  "Uma campanha ativa exige uma URL de retorno de tráfego"
 );
 
 const streamSchema = z.object({
@@ -3292,7 +3333,7 @@ const destinationSchema = z.object({
   url: z.string().url(),
   healthcheck_url: z.string().optional().refine(
     (value) => !value || (/^https?:\/\//i.test(value) && !/[{}]/.test(value)),
-    "Healthcheck URL must use HTTP(S) and contain no macros"
+    "A URL de verificação deve usar HTTP(S) e não conter macros"
   ),
   manual_status: z.enum([
     "active",

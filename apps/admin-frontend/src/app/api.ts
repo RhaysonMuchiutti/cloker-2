@@ -1,3 +1,4 @@
+import { apiErrorMessage } from "./locale";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8070";
 let actingAsUserID = "";
 
@@ -384,18 +385,18 @@ async function request<T>(
         ...(options.headers ?? {})
       }
     }
-  );
+  ).catch(() => { throw new Error("Não foi possível conectar à API. Confira sua conexão e tente novamente."); });
   if (!res.ok) {
-    let message = `Request failed with status ${res.status}`;
+    let message = apiErrorMessage(res.status);
     let body: ApiError | undefined;
     try {
       body = (await res.json()) as ApiError;
       if (body.error) {
-        message = body.error;
+        message = apiErrorMessage(res.status, body.error);
       }
     } catch (err) {
       if (err instanceof Error) {
-        message = `${message}: ${err.message}`;
+        message = apiErrorMessage(res.status);
       }
     }
     throw new ApiRequestError(
